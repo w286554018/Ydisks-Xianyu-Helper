@@ -491,6 +491,8 @@ type ApplicationPorts struct {
 	notificationChannels NotificationChannelsPort
 	// analytics 是订单分析用例。
 	analytics AnalyticsPort
+	// sourcing 是选品参考用例。
+	sourcing SourcingPort
 	// automationIssues 是自动化异常用例。
 	automationIssues AutomationIssuesPort
 	// automationAudit 是规则日志查询用例。
@@ -554,6 +556,7 @@ type ApplicationPortsInput struct {
 	UncertainNotifications      UncertainNotificationsPort
 	NotificationChannels        NotificationChannelsPort
 	Analytics                   AnalyticsPort
+	Sourcing                    SourcingPort
 	AutomationIssues            AutomationIssuesPort
 	AutomationAudit             AutomationAuditPort
 	AutomationRules             AutomationRulesPort
@@ -586,7 +589,8 @@ func NewApplicationPorts(input ApplicationPortsInput) *ApplicationPorts {
 		accountSummaries: input.AccountSummaries, accountTasks: input.AccountTasks, chat: input.Chat,
 		uncertainNotifications: input.UncertainNotifications, notificationChannels: input.NotificationChannels,
 		analytics: input.Analytics, automationIssues: input.AutomationIssues, automationAudit: input.AutomationAudit, automationRules: input.AutomationRules,
-		cards: input.Cards, deliveryTemplates: input.DeliveryTemplates, apiRequestTester: input.APIRequestTester, publishAutomationRules: input.PublishAutomationRules, defaultReplies: input.DefaultReplies, itemGreetings: input.ItemGreetings, library: input.Library,
+		sourcing: input.Sourcing,
+		cards:    input.Cards, deliveryTemplates: input.DeliveryTemplates, apiRequestTester: input.APIRequestTester, publishAutomationRules: input.PublishAutomationRules, defaultReplies: input.DefaultReplies, itemGreetings: input.ItemGreetings, library: input.Library,
 		keywords: input.Keywords, settings: input.Settings, admin: input.Admin, runtimeLogs: input.RuntimeLogs,
 	}
 }

@@ -75,6 +75,7 @@ const canonicalPageEntrypoints = [
   'app/features/sales/pages/SalesStats.tsx',
   'app/features/session/pages/SessionGate.tsx',
   'app/features/settings/pages/Settings.tsx',
+  'app/features/sourcing/pages/SourcingInsights.tsx',
 ];
 
 describe('React feature dependency boundaries', () => {

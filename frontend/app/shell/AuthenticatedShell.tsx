@@ -71,6 +71,8 @@ const DeliveryTemplates = lazy(/* DeliveryTemplates 页面按路由激活时加�
 const Notifications = lazy(/* Notifications 页面按路由激活时加载。 */ () => import('../features/notifications/pages/Notifications'));
 // Chat 是按需加载的聊天页面，避免未访问时载入聊天历史和 WebSocket 视图。
 const Chat = lazy(/* Chat 页面按路由激活时加载。 */ () => import('../features/chat/pages/Chat'));
+// SourcingInsights 是按需加载的选品参考页面（热词、查货、畅销榜与 AI 文案）。
+const SourcingInsights = lazy(/* SourcingInsights 页面按路由激活时加载。 */ () => import('../features/sourcing/pages/SourcingInsights'));
 // RuntimeLogs 是按需加载的运行日志页面，仅在管理员访问时加载，避免普通用户下载诊断代码。
 const RuntimeLogs = lazy(/* RuntimeLogs 页面按路由激活时加载。 */ () => import('../features/logs/pages/RuntimeLogs'));
 
@@ -132,6 +134,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       />;
       case 'delivery-templates': return <DeliveryTemplates />;
       case 'library': return <ResourceLibrary onBatchStarted={onNavigateToItems} />;
+      case 'sourcing': return <SourcingInsights />;
       case 'notifications': return <Notifications isAdmin={isAdmin} />;
       case 'logs': return isAdmin ? <RuntimeLogs /> : <Dashboard />;
       case 'settings': return isAdmin ? <Settings /> : <Dashboard />;

@@ -8,6 +8,7 @@ import (
 
 	"xianyu-go/internal/adapter"
 	orderapp "xianyu-go/internal/application/orders"
+	sourcingapp "xianyu-go/internal/application/sourcing"
 	"xianyu-go/internal/auth"
 	composition "xianyu-go/internal/composition"
 	"xianyu-go/internal/server"
@@ -189,6 +190,14 @@ type HTTPDependencies struct {
 	DatabaseHealth server.DatabaseHealthPort
 }
 
+// sourcingTransportPort 把可选的选品参考服务转换为 transport Port；nil 服务必须返回 nil 接口，避免装入带 nil 指针的非空接口。
+func sourcingTransportPort(service *sourcingapp.Service) server.SourcingPort {
+	if service == nil {
+		return nil
+	}
+	return service
+}
+
 // ServerDependencies 将组合层服务投影为 HTTP Server 需要的不可变最小 Port 快照。
 func ServerDependencies(services *composition.Services, base HTTPDependencies, sessionRecovery adapter.SessionRecoveryHandler) (server.Dependencies, error) {
 	if services == nil {
@@ -215,7 +224,7 @@ func ServerDependencies(services *composition.Services, base HTTPDependencies, s
 			AccountLongLogin: ports.AccountLongLogin, AccountSettings: ports.AccountSettings, AccountRuntime: ports.AccountRuntime,
 			AccountSummaries: ports.AccountSummaries, AccountTasks: ports.AccountTasks, Chat: ports.Chat,
 			UncertainNotifications: ports.UncertainNotifications, NotificationChannels: ports.NotificationChannels,
-			Analytics: ports.Analytics, AutomationIssues: ports.AutomationIssues, AutomationAudit: ports.AutomationAudit, AutomationRules: ports.AutomationRules, DeliveryTemplates: ports.DeliveryTemplates,
+			Analytics: ports.Analytics, Sourcing: sourcingTransportPort(ports.Sourcing), AutomationIssues: ports.AutomationIssues, AutomationAudit: ports.AutomationAudit, AutomationRules: ports.AutomationRules, DeliveryTemplates: ports.DeliveryTemplates,
 			Cards: ports.Cards, APIRequestTester: ports.APICardTester, PublishAutomationRules: ports.PublishAutomationRules, DefaultReplies: ports.DefaultReplies, ItemGreetings: ports.ItemGreetings, Library: ports.Library,
 			Keywords: ports.Keywords, Settings: ports.Settings, Admin: ports.Admin, RuntimeLogs: ports.RuntimeLogs,
 		}),

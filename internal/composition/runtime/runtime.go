@@ -164,6 +164,11 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 	if transportErr != nil {
 		return Runtime{}, fmt.Errorf("构造 transport 应用服务失败: %w", transportErr)
 	}
+	// sourcingService、sourcingErr 是选品参考应用服务及其调度组件登记失败原因。
+	sourcingService, sourcingErr := buildSourcing(infrastructure, browserManager, lifecycleCoordinator)
+	if sourcingErr != nil {
+		return Runtime{}, sourcingErr
+	}
 	// updateRunningCookie 将平台返回的新 Cookie 同步到运行时；值不记录到日志。
 	updateRunningCookie := func(ctx context.Context, accountID, value string) {
 		if services == nil {
@@ -186,6 +191,7 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 		Notifier: runtimeBundle.Notifier, Chat: runtimeBundle.Chat, ChatApplication: runtimeBundle.ChatApplication, Logger: infrastructure.Logger,
 		MTopClient: platformDependencies.MTOPClient, LongLoginClient: platformDependencies.LongLoginClient, QRLogin: platformDependencies.QRLoginService(),
 		UpdateRunningCookie: updateRunningCookie, SessionRecovery: sessionRecovery, LifecycleContext: lifecycleCoordinator.Context,
+		Sourcing: sourcingService,
 	})
 	if buildErr != nil {
 		return Runtime{}, fmt.Errorf("构造应用服务集合失败: %w", buildErr)

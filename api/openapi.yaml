@@ -8374,6 +8374,211 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthDegradedResponse'
+  "/api/v1/sourcing/hot-keywords":
+    get:
+      operationId: getApiV1SourcingHotKeywords
+      summary: 读取当日平台热词快照
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingHotKeywordResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/sourcing/hot-keywords/refresh":
+    post:
+      operationId: postApiV1SourcingHotKeywordsRefresh
+      summary: 手动触发一次平台热词采集
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/sourcing/search":
+    post:
+      operationId: postApiV1SourcingSearch
+      summary: 按关键词执行单次商品查询
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingSearchRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingSearchResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/sourcing/shop-ranking":
+    get:
+      operationId: getApiV1SourcingShopRanking
+      summary: 读取本店畅销榜快照
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['7d', '30d']
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingShopRankingResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/sourcing/copywriting":
+    post:
+      operationId: postApiV1SourcingCopywriting
+      summary: 生成上架文案或品类分析
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingCopywritingRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingCopywritingResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     cookieAuth:
@@ -10500,3 +10705,73 @@ components:
         details:
           type: object
       additionalProperties: true
+    SourcingHotKeywordResponse:
+      type: object
+      required: [date, keywords, status, error_message]
+      properties:
+        date: {type: string}
+        keywords:
+          type: array
+          items: {type: string}
+        status: {type: string}
+        error_message: {type: string}
+    SourcingSearchRequest:
+      type: object
+      required: [cookie_id, keyword]
+      properties:
+        cookie_id: {type: string}
+        keyword: {type: string}
+    SourcingSearchItem:
+      type: object
+      required: [item_id, title, price, want_count, location, detail_url]
+      properties:
+        item_id: {type: string}
+        title: {type: string}
+        price: {type: string}
+        want_count: {type: string}
+        location: {type: string}
+        detail_url: {type: string}
+    SourcingSearchResponse:
+      type: object
+      required: [keyword, items]
+      properties:
+        keyword: {type: string}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourcingSearchItem'
+    SourcingShopRankingEntry:
+      type: object
+      required: [item_id, item_title, sold_quantity, revenue, order_count]
+      properties:
+        item_id: {type: string}
+        item_title: {type: string}
+        sold_quantity: {type: integer}
+        revenue: {type: number}
+        order_count: {type: integer}
+    SourcingShopRankingResponse:
+      type: object
+      required: [date, window, status, entries]
+      properties:
+        date: {type: string}
+        window: {type: string}
+        status: {type: string}
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourcingShopRankingEntry'
+    SourcingCopywritingRequest:
+      type: object
+      required: [mode, topic]
+      properties:
+        mode:
+          type: string
+          enum: ['listing', 'analysis']
+        topic: {type: string}
+        reference: {type: string}
+    SourcingCopywritingResponse:
+      type: object
+      required: [mode, content]
+      properties:
+        mode: {type: string}
+        content: {type: string}
