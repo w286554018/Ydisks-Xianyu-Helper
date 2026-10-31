@@ -447,6 +447,8 @@ type ApplicationPorts struct {
 	itemBatchPreviewPersistence ItemBatchPreviewPersistencePort
 	// itemBatchLocalPublish 是远端发布成功后的本地收口用例。
 	itemBatchLocalPublish ItemBatchLocalPublishPort
+	// itemCopyPublish 是跨账号复制发布用例。
+	itemCopyPublish ItemCopyPublishPort
 	// itemSync 是商品同步用例。
 	itemSync ItemSyncPort
 	// itemCatalog 是商品目录读取用例。
@@ -534,6 +536,7 @@ type ApplicationPortsInput struct {
 	ItemCategoryRecommendation  ItemCategoryRecommendationPort
 	ItemBatchPreviewPersistence ItemBatchPreviewPersistencePort
 	ItemBatchLocalPublish       ItemBatchLocalPublishPort
+	ItemCopyPublish             ItemCopyPublishPort
 	ItemSync                    ItemSyncPort
 	ItemCatalog                 ItemCatalogPort
 	ItemCatalogMutation         ItemCatalogMutationPort
@@ -581,7 +584,8 @@ func NewApplicationPorts(input ApplicationPortsInput) *ApplicationPorts {
 		itemSinglePublish: input.ItemSinglePublish, itemBatchPreview: input.ItemBatchPreview,
 		itemBatchManagement: input.ItemBatchManagement, itemCategoryRecommendation: input.ItemCategoryRecommendation,
 		itemBatchPreviewPersistence: input.ItemBatchPreviewPersistence, itemBatchLocalPublish: input.ItemBatchLocalPublish,
-		itemSync: input.ItemSync, itemCatalog: input.ItemCatalog, itemCatalogMutation: input.ItemCatalogMutation, itemAISettings: input.ItemAISettings,
+		itemCopyPublish: input.ItemCopyPublish,
+		itemSync:        input.ItemSync, itemCatalog: input.ItemCatalog, itemCatalogMutation: input.ItemCatalogMutation, itemAISettings: input.ItemAISettings,
 		accountLogin: input.AccountLogin, qrLogin: input.QRLogin, sessionRecovery: input.SessionRecovery,
 		platformCredentials: input.PlatformCredentials, authentication: input.Authentication, loginAudit: input.LoginAudit,
 		passwordLogin: input.PasswordLogin, accountDelete: input.AccountDelete, accountProfile: input.AccountProfile,

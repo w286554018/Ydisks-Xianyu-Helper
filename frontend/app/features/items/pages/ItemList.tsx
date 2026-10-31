@@ -1,4 +1,4 @@
-import { ArrowRight,Bot,Box,CheckCircle2,CircleDashed,Edit,Filter,Link2,LocateFixed,PackagePlus,Plus,RefreshCw,Save,Search,ShoppingBag,Trash2,UploadCloud,User,X } from 'lucide-react';
+import { ArrowRight,Bot,Box,CheckCircle2,CircleDashed,Copy,Edit,Filter,Link2,LocateFixed,PackagePlus,Plus,RefreshCw,Save,Search,ShoppingBag,Trash2,UploadCloud,User,X } from 'lucide-react';
 import React,{ Suspense,useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AccountDetail,Item,ItemAIOverride,ItemAISettings,PublishLocation,ShippingRule } from '../api';
@@ -14,7 +14,9 @@ import ItemTable from '../components/ItemTable';
 import { ManualLocationPicker } from '../components/ManualLocationPicker';
 import { consumeSelectedFile } from '../fileInput';
 import { useItemPublishBatch } from '../hooks';
+import { useItemCopyPublish } from '../copyPublish';
 import { useItemActions } from '../itemActions';
+import ItemCopyModal from '../components/ItemCopyModal';
 import { matchesRuleCoverageFilter,paginateItems,TRADE_AUTOMATION_TRIGGERS,type RuleCoverageFilter } from '../ruleCoverage';
 import type { ItemListProps } from '../types';
 import { PageHeader } from '../../../../shared/ui/PageHeader';
@@ -128,6 +130,7 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
     setBatchLocation,
     openBatchModal,
     handleRecommendBatchCategory,
+    openBatchResultByID,
     openRecentBatchResult,
     handlePreviewBatch,
     handleStartBatch,
@@ -137,13 +140,16 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
     handleRetryBatchFailed,
   } = batchState;
 
+  // copyState 是跨账号复制发布的状态与动作边界；创建成功后跳既有批次进度。
+  const copyState = useItemCopyPublish({ onTaskCreated: openBatchResultByID });
+
   // itemActions 商品 feature 提供普通商品操作、发布表单和定位动作。
   const itemActions = useItemActions({
     selectedAccount,
     setSelectedAccount,
     setItems,
-    loadItems,
     loadShippingRules,
+    loadItems,
     onConfigureDelivery,
     setBatchLocations,
     setBatchLocation,
@@ -410,6 +416,7 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
             accountNickname={accountNickname}
             formatPrice={formatItemPrice}
             aiStatusText={itemAIStatusText}
+            onCopyToAccounts={copyState.openCopyModal}
             onConfigureDelivery={onConfigureDelivery}
             onOpenAISettings={setItemAISettingsTarget}
             onEdit={handleEdit}
@@ -438,6 +445,13 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
             return (
               <div key={`${item.cookie_id}-${item.item_id}`} className="ios-card p-3 rounded-2xl hover:shadow-lg transition-all group relative flex flex-col">
                   <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button
+                        onClick={/* 点击打开该商品的跨账号复制发布。 */ () => copyState.openCopyModal(item)}
+                        className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md text-gray-600 hover:bg-brand hover:text-white transition-colors"
+                        title="复制到其他账号"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={/* 当前回调处理用户交互或异步状态变化。 */ () => handleEdit(item)}
                         className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md text-gray-600 hover:bg-brand hover:text-white transition-colors"
@@ -508,6 +522,28 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
       </div>
       )}
 
+      {copyState.showCopyModal && copyState.copySource && createPortal(
+        <ItemCopyModal
+          sourceTitle={copyState.copySource.item_title || copyState.copySource.item_id}
+          preview={copyState.copyPreview}
+          loading={copyState.copyLoading}
+          submitting={copyState.copySubmitting}
+          error={copyState.copyError}
+          title={copyState.copyTitle}
+          onTitleChange={copyState.setCopyTitle}
+          description={copyState.copyDescription}
+          onDescriptionChange={copyState.setCopyDescription}
+          price={copyState.copyPrice}
+          onPriceChange={copyState.setCopyPrice}
+          intervalSeconds={copyState.copyIntervalSeconds}
+          onIntervalSecondsChange={copyState.setCopyIntervalSeconds}
+          selectedTargets={copyState.copySelectedTargets}
+          onToggleTarget={copyState.toggleCopyTarget}
+          onSubmit={/* 点击提交复制任务。 */ () => void copyState.submitCopyTask()}
+          onClose={copyState.closeCopyModal}
+        />,
+        document.body,
+      )}
       {showEditModal && selectedItem && createPortal(
         <div className="modal-overlay-centered">
           <div className="modal-container" style={{maxWidth: '560px'}}>

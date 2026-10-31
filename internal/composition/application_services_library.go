@@ -58,9 +58,9 @@ func newLibraryBatchID() string {
 }
 
 // buildCatalogAndLibrary 构造商品目录服务集合和本地资源库服务；资源库的发布预检复用目录服务的预检落库，因此两者一起构造。
-func buildCatalogAndLibrary(dependencies Dependencies, sessionRecovery adapter.SessionRecoveryHandler, batchPreview *itemapp.BatchPreviewService) (itemCatalogServices, *libraryapp.Service, error) {
+func buildCatalogAndLibrary(dependencies Dependencies, sessionRecovery adapter.SessionRecoveryHandler, batchPreview *itemapp.BatchPreviewService, batchPreviewPort *adapter.ItemBatchPreviewPort) (itemCatalogServices, *libraryapp.Service, error) {
 	// catalogServices、catalogErr 是商品目录服务集合及其构造错误。
-	catalogServices, catalogErr := buildItemCatalogServices(dependencies, sessionRecovery)
+	catalogServices, catalogErr := buildItemCatalogServices(dependencies, sessionRecovery, batchPreview, batchPreviewPort)
 	if catalogErr != nil {
 		return itemCatalogServices{}, nil, catalogErr
 	}

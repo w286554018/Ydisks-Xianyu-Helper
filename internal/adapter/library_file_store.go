@@ -131,6 +131,25 @@ func (s *LibraryFileStore) Prepare(_ context.Context, batchID string) (string, e
 	return dir, nil
 }
 
+// SaveImage 把复制发布的图片字节写入批次目录下的 name 文件。
+// name 必须是单层普通文件名，与快照复制共用同一白名单约束。
+func (s *LibraryFileStore) SaveImage(_ context.Context, uploadDir, name string, data []byte) error {
+	if !libraryCopyNamePattern.MatchString(name) || name == "." || name == ".." {
+		return errors.New("快照文件名无效")
+	}
+	// err 保存 checkBatchDir 调用的失败原因。
+	if err := s.checkBatchDir(uploadDir); err != nil {
+		return err
+	}
+	// target 是目标文件绝对路径。
+	target := filepath.Join(uploadDir, name)
+	// 写入失败直接上抛；批次目录由 Discard 统一回收。
+	if err := os.WriteFile(target, data, 0o640); err != nil {
+		return fmt.Errorf("写入批次图片失败: %w", err)
+	}
+	return nil
+}
+
 // CopyImage 把资源库图片复制为批次目录下的快照文件。
 func (s *LibraryFileStore) CopyImage(ctx context.Context, uploadDir, key, name string) error {
 	if !libraryCopyNamePattern.MatchString(name) || name == "." || name == ".." {

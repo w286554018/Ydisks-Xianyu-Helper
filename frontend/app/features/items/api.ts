@@ -6,6 +6,8 @@ BatchIDResponse,
 CategoryRecommendationResponse,
 Item,
 ItemAISettings,
+ItemCopyPreview,
+ItemCopyTaskResult,
 ItemDetailResponse,
 ItemPublishBatchPreviewResponse,
 ItemPublishBatchResponse,
@@ -263,4 +265,53 @@ export const getItemDetail = async (accountID: string, itemID: string): Promise<
   // response 保存已由 OpenAPI 路径类型约束的商品详情传输响应。
   const response = await runContractRequest(/* signal 控制商品详情请求的取消和超时。 */ signal => contractClient.GET('/api/v1/items/{cookie_id}/{item_id}', { params: { path: { cookie_id: accountID, item_id: itemID } }, signal }));
   return response;
+};
+/** 预览跨账号复制：读取源商品快照预填内容与全部候选目标账号的预检状态，全程不发平台请求。 */
+export const previewItemCopy = async (form: {
+  /** cookieId 是源账号标识。 */
+  cookieId: string;
+  /** itemId 是源商品标识。 */
+  itemId: string;
+  /** targetCookieIds 是候选目标账号列表；为空时服务端返回全部账号预检。 */
+  targetCookieIds?: string[];
+}, options?: RequestControlOptions): Promise<ItemCopyPreview> => {
+  return runContractRequest(/* signal 控制复制预览请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/copy-preview', {
+    body: {
+      cookie_id: form.cookieId,
+      item_id: form.itemId,
+      target_cookie_ids: form.targetCookieIds ?? [],
+    } as never,
+    signal,
+  }), options) as unknown as Promise<ItemCopyPreview>;
+};
+
+/** 创建跨账号复制任务：服务端落库为批量铺货预检批次，前端用既有批次进度接口轮询。 */
+export const createItemCopyTask = async (form: {
+  /** cookieId 是源账号标识。 */
+  cookieId: string;
+  /** itemId 是源商品标识。 */
+  itemId: string;
+  /** targetCookieIds 是目标账号列表。 */
+  targetCookieIds: string[];
+  /** titleEdit 为空时沿用源标题。 */
+  titleEdit?: string;
+  /** descriptionEdit 为空时沿用源描述。 */
+  descriptionEdit?: string;
+  /** priceEdit 为空时沿用源价格。 */
+  priceEdit?: string;
+  /** publishIntervalSeconds 是相邻发布的最小间隔秒数；非正数使用系统默认。 */
+  publishIntervalSeconds?: number;
+}, options?: RequestControlOptions): Promise<ItemCopyTaskResult> => {
+  return runContractRequest(/* signal 控制复制任务创建请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/copy-tasks', {
+    body: {
+      cookie_id: form.cookieId,
+      item_id: form.itemId,
+      target_cookie_ids: form.targetCookieIds,
+      title_edit: form.titleEdit ?? '',
+      description_edit: form.descriptionEdit ?? '',
+      price_edit: form.priceEdit ?? '',
+      publish_interval_seconds: form.publishIntervalSeconds ?? 0,
+    } as never,
+    signal,
+  }), options) as unknown as Promise<ItemCopyTaskResult>;
 };

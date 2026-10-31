@@ -211,6 +211,8 @@ export interface ItemPublishBatchState {
   // openRecentBatchResult 打开最近批量任务结果。
   openRecentBatchResult: () => Promise<void>;
   // handlePreviewBatch 提交文件并执行批量预检。
+  // openBatchResultByID 按批次标识打开既有批次的结果弹窗。
+  openBatchResultByID: (batchID: string) => Promise<void>;
   handlePreviewBatch: () => Promise<void>;
   // handleStartBatch 启动预检通过的批量任务。
   handleStartBatch: () => Promise<void>;

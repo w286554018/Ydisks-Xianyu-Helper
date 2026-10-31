@@ -165,10 +165,36 @@ export const useItemPublishBatch = (options: ItemPublishBatchOptions): ItemPubli
     [batchCategoryKeyword, beginBatchRequest, isCurrentBatchOperation, options.selectedAccount],
   );
 
+  // openBatchResultByID 按批次标识加载任务详情并打开批次结果弹窗，供跨账号复制创建成功后复用。
+  const openBatchResultByID = useCallback(
+    // 按 ID 打开器只读取已存在的批量任务。
+    async (batchID: string) => {
+    if (!batchID) return;
+    // request 是本次批次读取的独占取消器和代次。
+    const request = beginBatchRequest();
+    setBatchLoading(true);
+    setShowBatchModal(true);
+    try {
+      // detail 是该批次的最新服务端状态。
+      const detail = await getItemPublishBatch(batchID, { signal: request.controller.signal });
+      if (!isCurrentBatchOperation(request.requestGeneration, request.controller)) return;
+      setBatchDetail(detail);
+      setBatchPublishIntervalSeconds(detail.publish_interval_seconds || 5);
+      setBatchPhase(isBatchInProgress(detail.status) ? 'running' : 'done');
+      setRecentBatch(detail);
+    } catch (error /* 批次详情读取错误 */) {
+      if (!isCurrentBatchOperation(request.requestGeneration, request.controller)) return;
+      console.error('加载批量铺货结果失败:', error);
+    } finally {
+      if (isCurrentBatchOperation(request.requestGeneration, request.controller)) setBatchLoading(false);
+    }
+    },
+    [beginBatchRequest, isCurrentBatchOperation, setRecentBatch],
+  );
+
   // openRecentBatchResult 加载最近批量任务详情并打开结果弹窗。
   const openRecentBatchResult = useCallback(
-    // 最近结果打开器只读取已存在的批量任务。
-    async () => {
+    async () => { /* 打开动作无参数。 */
     if (!recentBatch?.id) return;
     // request 是本次最近结果读取的独占取消器和代次。
     const request = beginBatchRequest();
@@ -443,6 +469,7 @@ export const useItemPublishBatch = (options: ItemPublishBatchOptions): ItemPubli
     openBatchModal,
     handleRecommendBatchCategory,
     openRecentBatchResult,
+    openBatchResultByID,
     handlePreviewBatch,
     handleStartBatch,
     handleCancelBatch,

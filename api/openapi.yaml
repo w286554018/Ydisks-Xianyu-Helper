@@ -3726,6 +3726,108 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/copy-preview":
+    post:
+      operationId: postApiV1ItemsCopyPreview
+      summary: postApiV1ItemsCopyPreview
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCopyPreviewRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemCopyPreviewResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/copy-tasks":
+    post:
+      operationId: postApiV1ItemsCopyTasks
+      summary: postApiV1ItemsCopyTasks
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCopyTaskRequest'
+      responses:
+        '201':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemCopyTaskResultResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/items/{cookie_id}":
     post:
       operationId: postApiV1ItemsBycookie_id
@@ -9218,6 +9320,52 @@ components:
         fallback_tb_category_id: {type: string}
         location: {type: string}
         publish_interval_seconds: {type: integer}
+    ItemCopyPreviewRequest:
+      type: object
+      required: [cookie_id, item_id]
+      properties:
+        cookie_id: {type: string}
+        item_id: {type: string}
+        target_cookie_ids: {type: array, items: {type: string}}
+    ItemCopyPreviewResponse:
+      type: object
+      required: [source_cookie_id, source_item_id, title, description, price, image_urls, targets]
+      properties:
+        source_cookie_id: {type: string}
+        source_item_id: {type: string}
+        title: {type: string}
+        description: {type: string}
+        price: {type: string}
+        image_urls: {type: array, items: {type: string}}
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemCopyAccountView'
+    ItemCopyAccountView:
+      type: object
+      required: [cookie_id, name, usable]
+      properties:
+        cookie_id: {type: string}
+        name: {type: string}
+        usable: {type: boolean}
+        reason: {type: string}
+    ItemCopyTaskRequest:
+      type: object
+      required: [cookie_id, item_id, target_cookie_ids]
+      properties:
+        cookie_id: {type: string}
+        item_id: {type: string}
+        target_cookie_ids: {type: array, items: {type: string}}
+        title_edit: {type: string}
+        description_edit: {type: string}
+        price_edit: {type: string}
+        publish_interval_seconds: {type: integer}
+    ItemCopyTaskResultResponse:
+      type: object
+      required: [batch_id, row_count]
+      properties:
+        batch_id: {type: string}
+        row_count: {type: integer}
     HealthResponse:
       type: object
       required: [status, database, version, commit]

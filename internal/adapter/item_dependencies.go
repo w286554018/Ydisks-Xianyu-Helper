@@ -23,6 +23,11 @@ func NewItemDependencies(store *db.Store) (*ItemDependencies, error) {
 	return &ItemDependencies{store: store}, nil
 }
 
+// NewItemCopySourceStore 创建复制发布使用的商品快照读取仓储。
+func (d *ItemDependencies) NewItemCopySourceStore() *db.Items {
+	return d.store.Items
+}
+
 // NewItemBatchRepository 创建批量发布状态仓储。
 func (d *ItemDependencies) NewItemBatchRepository() *ItemBatchRepository {
 	if d == nil {

@@ -470,3 +470,41 @@ export interface OperationResponse {
   /** 操作完成后是否需要重新登录。 */
   requires_relogin?: boolean;
 }
+
+/** 跨账号复制预览中的目标账号预检视图。 */
+export interface ItemCopyAccount {
+  /** 账号稳定标识。 */
+  cookie_id: string;
+  /** 展示名（备注优先，昵称兜底）。 */
+  name: string;
+  /** 该账号当前是否可作为复制目标。 */
+  usable: boolean;
+  /** 不可用原因说明；可用时为空。 */
+  reason?: string;
+}
+
+/** 跨账号复制预览响应：源商品预填内容与目标账号预检。 */
+export interface ItemCopyPreview {
+  /** 源账号标识。 */
+  source_cookie_id: string;
+  /** 源商品标识。 */
+  source_item_id: string;
+  /** 预填标题（可编辑）。 */
+  title: string;
+  /** 预填描述（可编辑）。 */
+  description: string;
+  /** 预填售价文本（可编辑）。 */
+  price: string;
+  /** 源商品平台图片地址列表（展示用）。 */
+  image_urls: string[];
+  /** 目标账号预检结果。 */
+  targets: ItemCopyAccount[];
+}
+
+/** 跨账号复制任务创建结果；批次进度复用既有批量铺货接口。 */
+export interface ItemCopyTaskResult {
+  /** 生成的批量铺货批次标识。 */
+  batch_id: string;
+  /** 批次行数（目标账号数）。 */
+  row_count: number;
+}

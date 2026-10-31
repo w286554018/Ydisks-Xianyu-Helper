@@ -15,7 +15,7 @@ afterEach(cleanup);
 // renderTable 渲染列表视图并返回各回调的记录函数。
 const renderTable = (items: Item[], rules: ShippingRule[]) => {
   // handlers 记录表格触发的全部用户操作回调。
-  const handlers = { onConfigureDelivery: vi.fn(), onOpenAISettings: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
+  const handlers = { onConfigureDelivery: vi.fn(), onOpenAISettings: vi.fn(), onEdit: vi.fn(), onCopyToAccounts: vi.fn(), onDelete: vi.fn() };
   render(<ItemTable items={items} rules={rules} accountNickname={/* 返回固定昵称。 */ () => '店铺A'} formatPrice={/* 原样返回价格。 */ price => `¥${price}`} aiStatusText={{ inherit: '继承账号', enabled: '已启用', disabled: '已停用' }} emptyText="暂无商品" {...handlers} />);
   return handlers;
 };

@@ -6,6 +6,7 @@ import (
 
 	"xianyu-go/internal/adapter"
 	itemapp "xianyu-go/internal/application/items"
+	"xianyu-go/internal/uploadroot"
 )
 
 // itemBatchServices 是批量发布运行时、预检和本地收口服务的完整不可变组合结果。
@@ -100,10 +101,13 @@ type itemCatalogServices struct {
 	previewPersistence *itemapp.BatchPreviewPersistenceService
 	// singlePublish 提供单商品发布服务。
 	singlePublish *itemapp.Service
+	// copyPublish 提供跨账号复制发布服务。
+	copyPublish *itemapp.CopyPublishService
 }
 
 // buildItemCatalogServices 构造商品目录和发布服务，并把平台会话恢复回调限制在组合根。
-func buildItemCatalogServices(dependencies Dependencies, sessionRecovery adapter.SessionRecoveryHandler) (itemCatalogServices, error) {
+func buildItemCatalogServices(dependencies Dependencies, sessionRecovery adapter.SessionRecoveryHandler,
+	batchPreview *itemapp.BatchPreviewService, previewPort *adapter.ItemBatchPreviewPort) (itemCatalogServices, error) {
 	// itemCatalogRepository 是商品读写用例共用的数据库适配器。
 	itemCatalogRepository := dependencies.ItemDependencies.NewItemCatalogRepository()
 	// itemCatalog 是商品列表和详情读取用例的应用服务。
@@ -143,5 +147,25 @@ func buildItemCatalogServices(dependencies Dependencies, sessionRecovery adapter
 	if itemSinglePublishErr != nil {
 		return itemCatalogServices{}, fmt.Errorf("构造单商品发布服务失败: %w", itemSinglePublishErr)
 	}
-	return itemCatalogServices{catalog: itemCatalog, mutation: itemCatalogMutation, aiSettings: itemAISettings, categoryRecommendation: itemCategoryRecommendation, previewPersistence: itemBatchPreviewPersistence, singlePublish: itemSinglePublish}, nil
+	// copyAccounts 是复制预检的账号摘要适配器（非敏感字段）。
+	copyAccounts := adapter.NewCopyAccountsAdapter(dependencies.AccountDependencies.NewAccountSummaryRepository())
+	// copyFetcher 是复制图片下载适配器（与批量发布下载共用同一公网安全限制）。
+	copyFetcher, copyFetcherErr := adapter.NewCopyHTTPImageFetcher(downloadImageURL)
+	if copyFetcherErr != nil {
+		return itemCatalogServices{}, fmt.Errorf("构造复制图片下载适配器失败: %w", copyFetcherErr)
+	}
+	// copyFileStore 与资源库共用同一上传根目录文件存储（批次目录管理能力一致）。
+	copyFileStore, copyFileStoreErr := adapter.NewLibraryFileStore(uploadroot.Dir())
+	if copyFileStoreErr != nil {
+		return itemCatalogServices{}, fmt.Errorf("构造复制批次文件存储失败: %w", copyFileStoreErr)
+	}
+	// itemCopyPublish 是跨账号复制发布应用服务。
+	itemCopyPublish, itemCopyPublishErr := itemapp.NewCopyPublishService(
+		adapter.NewCopyItemSourceAdapter(dependencies.ItemDependencies.NewItemCopySourceStore()),
+		previewPort, copyAccounts, copyFileStore, copyFetcher,
+		batchPreview, itemBatchPreviewPersistence, newLibraryBatchID, maxLibraryPublishRows)
+	if itemCopyPublishErr != nil {
+		return itemCatalogServices{}, fmt.Errorf("构造复制发布服务失败: %w", itemCopyPublishErr)
+	}
+	return itemCatalogServices{catalog: itemCatalog, mutation: itemCatalogMutation, aiSettings: itemAISettings, categoryRecommendation: itemCategoryRecommendation, previewPersistence: itemBatchPreviewPersistence, singlePublish: itemSinglePublish, copyPublish: itemCopyPublish}, nil
 }

@@ -1,4 +1,4 @@
-import { CheckCircle2,CircleDashed,Edit,Link2,Trash2 } from 'lucide-react';
+import { CheckCircle2,CircleDashed,Copy,Edit,Link2,Trash2 } from 'lucide-react';
 import React from 'react';
 import type { Item,ItemAIOverride,ShippingRule } from '../api';
 import { countTriggerRules,TRADE_AUTOMATION_TRIGGERS } from '../ruleCoverage';
@@ -21,6 +21,8 @@ export interface ItemTableProps {
   onOpenAISettings: (item: Item) => void;
   /** onEdit 打开商品编辑弹窗。 */
   onEdit: (item: Item) => void;
+  /** onCopyToAccounts 打开该商品的跨账号复制发布弹窗。 */
+  onCopyToAccounts: (item: Item) => void;
   /** onDelete 删除商品。 */
   onDelete: (item: Item) => void;
   /** emptyText 是没有商品时的提示文案。 */
@@ -28,7 +30,7 @@ export interface ItemTableProps {
 }
 
 /** ItemTable 以表格形式展示商品，并逐列标出四类交易自动化规则的配置数量。 */
-const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, formatPrice, aiStatusText, onConfigureDelivery, onOpenAISettings, onEdit, onDelete, emptyText }) => {
+const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, formatPrice, aiStatusText, onConfigureDelivery, onOpenAISettings, onEdit, onCopyToAccounts, onDelete, emptyText }) => {
   if (items.length === 0) return <div className="py-20 text-center text-gray-400">{emptyText}</div>;
   return (
     <div className="ios-card overflow-x-auto rounded-2xl">
@@ -71,6 +73,7 @@ const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, fo
               </td>
               <td className="px-4 py-3">
                 <div className="flex justify-end gap-1.5">
+                  <button type="button" onClick={/* 点击打开该商品的跨账号复制发布。 */ () => onCopyToAccounts(item)} className="rounded-lg bg-gray-100 p-1.5 text-gray-600 hover:bg-brand hover:text-white" title="复制到其他账号" aria-label={`复制商品到其他账号：${item.item_title || item.item_id}`}><Copy className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={/* 点击打开该商品的发货规则配置。 */ () => onConfigureDelivery(item)} className="inline-flex items-center gap-1 rounded-lg bg-gray-900 px-2.5 py-1.5 font-bold text-white hover:bg-black"><Link2 className="h-3 w-3" />发货规则</button>
                   <button type="button" onClick={/* 点击编辑商品。 */ () => onEdit(item)} className="rounded-lg bg-gray-100 p-1.5 text-gray-600 hover:bg-brand hover:text-white" title="编辑" aria-label="编辑"><Edit className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={/* 点击删除商品。 */ () => onDelete(item)} className="rounded-lg bg-gray-100 p-1.5 text-red-500 hover:bg-red-100" title="删除" aria-label="删除"><Trash2 className="h-3.5 w-3.5" /></button>
