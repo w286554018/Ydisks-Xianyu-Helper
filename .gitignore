@@ -48,3 +48,6 @@
 .DS_Store
 .idea/
 .vscode/
+
+# Private deployment keys, backups and migration artifacts
+/.local/server-access/

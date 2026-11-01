@@ -2,6 +2,7 @@
 .gitignore
 .env
 .env.*
+.local/server-access
 data
 browser_data
 frontend/node_modules
