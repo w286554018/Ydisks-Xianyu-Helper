@@ -81,6 +81,18 @@ describe('library api adapter', /* 图片库与模板的 API 适配。 */ () => 
     expect(await startPublishBatch('p')).toBe('b1');
   });
 
+  test('预检请求携带完整发货地字段', /* 发货地透传。 */ async () => {
+    postMock.mockResolvedValueOnce({ data: { preview_id: 'p2', total: 1, valid: 1, invalid: 0, rows: [] } });
+    await previewTemplatePublish({
+      templateIds: [1], cookieIds: ['a'], intervalSeconds: 5,
+      location: { province: '广东省', city: '深圳市', area: '南山区', divisionId: '440305', longitude: 113.9, latitude: 22.5, poiId: 'B001', poiName: '科技园' },
+    });
+    expect(postMock.mock.calls[0][1].body.location).toEqual({
+      province: '广东省', city: '深圳市', area: '南山区', division_id: '440305',
+      longitude: 113.9, latitude: 22.5, poi_id: 'B001', poi_name: '科技园',
+    });
+  });
+
   test('卡密、发货模板与账号选项仅保留可用项', /* 选项过滤。 */ async () => {
     getMock.mockResolvedValueOnce({ data: [{ id: 1, name: 'A', type: 'data', enabled: true }, { id: 2, name: 'B', type: 'text', enabled: false }] });
     expect(await listCardOptions()).toEqual([{ id: 1, name: 'A', type: 'data' }]);

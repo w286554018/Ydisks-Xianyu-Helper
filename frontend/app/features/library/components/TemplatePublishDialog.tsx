@@ -1,9 +1,9 @@
-import { X } from 'lucide-react';
+import { MapPin, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { libraryErrorMessage, previewTemplatePublish, startPublishBatch } from '../api';
 import { selectionState, toggleAllVisible } from '../selection';
-import type { LibraryAccountOption, LibraryPublishPreview, ProductTemplate } from '../types';
+import type { LibraryAccountOption, LibraryLocationPickerSlotProps, LibraryPublishLocation, LibraryPublishPreview, ProductTemplate } from '../types';
 import { SelectAllCheckbox } from './SelectAllCheckbox';
 
 /** TemplatePublishDialogProps 描述模板发布弹窗。 */
@@ -12,6 +12,8 @@ export interface TemplatePublishDialogProps {
   templates: ProductTemplate[];
   /** accounts 是可选目标账号。 */
   accounts: LibraryAccountOption[];
+  /** locationPicker 是应用壳注入的发货地选择器组件；缺省时不显示发货地入口。 */
+  locationPicker?: React.ComponentType<LibraryLocationPickerSlotProps> | null;
   /** onClose 关闭弹窗。 */
   onClose: () => void;
   /** onStarted 在批次启动成功后通知父级，参数是批次标识。 */
@@ -22,7 +24,7 @@ export interface TemplatePublishDialogProps {
 const maxPublishRows = 50;
 
 /** TemplatePublishDialog 先生成“模板 × 账号”预检，用户确认后再启动既有批量铺货批次。 */
-export const TemplatePublishDialog = ({ templates, accounts, onClose, onStarted }: TemplatePublishDialogProps) => {
+export const TemplatePublishDialog = ({ templates, accounts, locationPicker: LocationPicker, onClose, onStarted }: TemplatePublishDialogProps) => {
   // selectedAccounts 是已勾选账号。
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   // interval 是发布间隔秒数文本。
@@ -31,6 +33,10 @@ export const TemplatePublishDialog = ({ templates, accounts, onClose, onStarted 
   const [accountQuery, setAccountQuery] = useState('');
   // onlyInvalid 为真时预检表只显示需修正的行，仅影响展示，不影响确认发布。
   const [onlyInvalid, setOnlyInvalid] = useState(false);
+  // location 是用户选择的统一发货地；null 表示使用各账号平台默认值。
+  const [location, setLocation] = useState<LibraryPublishLocation | null>(null);
+  // locationPickerOpen 表示发货地选择器是否打开。
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   // preview 是最近一次预检结果。
   const [preview, setPreview] = useState<LibraryPublishPreview | null>(null);
   // busy 表示预检或启动请求进行中。
@@ -79,7 +85,7 @@ export const TemplatePublishDialog = ({ templates, accounts, onClose, onStarted 
     setError('');
     try {
       // result 是预检结果。
-      const result = await previewTemplatePublish({ templateIds: templates.map(/* template 提取主键。 */ template => template.id), cookieIds: selectedAccounts, intervalSeconds: Number(interval) || 5 }, { signal: controller.signal });
+      const result = await previewTemplatePublish({ templateIds: templates.map(/* template 提取主键。 */ template => template.id), cookieIds: selectedAccounts, location: location ?? undefined, intervalSeconds: Number(interval) || 5 }, { signal: controller.signal });
       if (!controller.signal.aborted) setPreview(result);
     } catch (failure /* failure 是预检失败原因。 */) {
       if (!controller.signal.aborted) setError(libraryErrorMessage(failure, '生成发布预检失败'));
@@ -138,7 +144,20 @@ export const TemplatePublishDialog = ({ templates, accounts, onClose, onStarted 
             </div>
           </fieldset>
           <label className="block text-sm font-bold text-gray-800">发布间隔（秒）<input aria-label="发布间隔秒数" type="number" min={0} max={3600} className="ios-input mt-1 w-32 rounded-xl px-3 py-2" value={interval} onChange={/* 修改间隔并使旧预检失效。 */ event => { setInterval(event.target.value); setPreview(null); }} /></label>
-          <p className="text-xs text-gray-500">将生成 {rowCount} 行（模板 × 账号，上限 {maxPublishRows}）；发货地使用账号平台默认值。</p>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-bold text-gray-800">发货地</span>
+              {location ? (
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700"><MapPin className="h-3.5 w-3.5" />{[location.province, location.city, location.area, location.poiName].filter(Boolean).join(' ')}</span>
+                  <button type="button" onClick={/* 清除发货地并使旧预检失效。 */ () => { setLocation(null); setPreview(null); }} className="text-xs font-bold text-gray-500 underline hover:text-gray-700">清除，改用账号默认</button>
+                </>
+              ) : (
+                <button type="button" disabled={!LocationPicker} onClick={/* 打开发货地选择器。 */ () => setLocationPickerOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-200 disabled:opacity-50"><MapPin className="h-3.5 w-3.5" />选择发货地（可选）</button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500">将生成 {rowCount} 行（模板 × 账号，上限 {maxPublishRows}）；{location ? '所有行使用上方统一发货地。' : '未选择时使用各账号在平台上的默认发货地。'}</p>
+          </div>
           {preview && (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-4">
@@ -164,8 +183,17 @@ export const TemplatePublishDialog = ({ templates, accounts, onClose, onStarted 
           <button type="button" disabled={busy || rowCount === 0 || rowCount > maxPublishRows} onClick={/* 生成预检。 */ () => void runPreview()} className="flex-1 ios-btn-secondary px-6 py-3 rounded-xl font-bold disabled:opacity-50">{busy && !preview ? '处理中...' : '生成预检'}</button>
           <button type="button" disabled={busy || !preview || preview.valid <= 0} onClick={/* 确认并启动批次。 */ () => void confirm()} className="flex-1 ios-btn-primary px-6 py-3 rounded-xl font-bold disabled:opacity-50">{preview ? `确认发布 ${preview.valid} 个商品` : '确认发布'}</button>
         </div></div>
+        {LocationPicker && (
+          <LocationPicker
+            open={locationPickerOpen}
+            onClose={/* locationPickerCloseAction 关闭发货地选择器。 */ () => setLocationPickerOpen(false)}
+            onConfirm={/* locationConfirmAction 记录发货地并使旧预检失效。 */ (chosen /* chosen 是选中的完整发货地。 */) => { setLocation(chosen); setPreview(null); setLocationPickerOpen(false); }}
+          />
+        )}
       </div>
     </div>,
     document.body,
   );
 };
+
+

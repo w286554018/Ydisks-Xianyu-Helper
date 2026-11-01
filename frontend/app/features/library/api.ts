@@ -152,7 +152,11 @@ export const previewTemplatePublish = async (input: {
   const response = await runContractRequest(/* signal 控制发布预检请求的取消和超时。 */ signal => contractClient.POST('/api/v1/library/product-templates/publish-preview', {
     body: {
       template_ids: input.templateIds, cookie_ids: input.cookieIds, publish_interval_seconds: input.intervalSeconds,
-      ...(input.location ? { location: { province: input.location.province, city: input.location.city, area: input.location.area, division_id: input.location.divisionId } } : {}),
+      ...(input.location ? { location: {
+        province: input.location.province, city: input.location.city, area: input.location.area,
+        division_id: input.location.divisionId, longitude: input.location.longitude, latitude: input.location.latitude,
+        poi_id: input.location.poiId, poi_name: input.location.poiName,
+      } } : {}),
     },
     signal,
   }), options);

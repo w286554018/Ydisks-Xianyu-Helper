@@ -7,6 +7,7 @@ import { SelectAllCheckbox } from '../components/SelectAllCheckbox';
 import { TemplateCard } from '../components/TemplateCard';
 import { TemplateEditorDialog } from '../components/TemplateEditorDialog';
 import { TemplatePublishDialog } from '../components/TemplatePublishDialog';
+import type { LibraryLocationPickerSlotProps } from '../types';
 import { type BatchDeleteResult, useAutomationOptions, useLibraryImages, useProductTemplates } from '../hooks';
 import { defaultImageFilters, imageUsage, isImageFilterActive, queryImages, type ImageFilters } from '../imageQuery';
 import { countHidden, selectionState, toggleAllVisible } from '../selection';
@@ -38,10 +39,12 @@ const summarizeBatch = (result: BatchDeleteResult, nameOf: (id: number) => strin
 export interface ResourceLibraryProps {
   /** onBatchStarted 在模板批次启动后通知应用壳，例如跳转到商品页查看进度。 */
   onBatchStarted?: (batchId: string) => void;
+  /** locationPicker 是应用壳注入的发货地选择器组件；缺省时模板发布弹窗不显示发货地入口。 */
+  locationPicker?: React.ComponentType<LibraryLocationPickerSlotProps> | null;
 }
 
 /** ResourceLibrary 是本地资源库页面：商品模板（批量铺货入口）与图片库。 */
-const ResourceLibrary: React.FC<ResourceLibraryProps> = ({ onBatchStarted }) => {
+const ResourceLibrary: React.FC<ResourceLibraryProps> = ({ onBatchStarted, locationPicker }) => {
   // tab 是当前标签页。
   const [tab, setTab] = useState<'templates' | 'images'>('templates');
   // images 是图片库状态；templates 是模板状态。
@@ -205,7 +208,7 @@ const ResourceLibrary: React.FC<ResourceLibraryProps> = ({ onBatchStarted }) => 
           onSave={/* 保存成功后关闭编辑器。 */ async body => { if (await templates.save(editing?.id ?? null, body)) setEditing(undefined); }} />
       )}
       {publishing && (
-        <TemplatePublishDialog templates={selectedTemplates} accounts={options.accounts} onClose={/* 关闭发布弹窗。 */ () => setPublishing(false)}
+        <TemplatePublishDialog templates={selectedTemplates} accounts={options.accounts} locationPicker={locationPicker} onClose={/* 关闭发布弹窗。 */ () => setPublishing(false)}
           onStarted={/* 批次启动后关闭弹窗并通知应用壳。 */ batchId => { setPublishing(false); setSelectedIds([]); setNotice({ text: '发布已开始，可在商品列表的批量铺货中查看进度。', tone: 'ok' }); onBatchStarted?.(batchId); }} />
       )}
     </div>

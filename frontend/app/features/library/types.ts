@@ -233,7 +233,7 @@ export interface LibraryPublishPreview {
   rows: LibraryPublishPreviewRow[];
 }
 
-/** LibraryPublishLocation 是发布使用的发货地。 */
+/** LibraryPublishLocation 是发布使用的发货地，字段与高德 POI 完整对齐。 */
 export interface LibraryPublishLocation {
   /** province 是省。 */
   province: string;
@@ -243,6 +243,24 @@ export interface LibraryPublishLocation {
   area: string;
   /** divisionId 是行政区划标识。 */
   divisionId: string;
+  /** longitude 是地点经度。 */
+  longitude: number;
+  /** latitude 是地点纬度。 */
+  latitude: number;
+  /** poiId 是地图服务返回的兴趣点标识。 */
+  poiId: string;
+  /** poiName 是兴趣点展示名称。 */
+  poiName: string;
+}
+
+/** LibraryLocationPickerSlotProps 是发货地选择器插槽的属性，应用壳把地图选择组件注入到模板发布弹窗。 */
+export interface LibraryLocationPickerSlotProps {
+  /** open 表示选择器是否显示。 */
+  open: boolean;
+  /** onClose 关闭选择器。 */
+  onClose: () => void;
+  /** onConfirm 返回用户选中的完整发货地。 */
+  onConfirm: (location: LibraryPublishLocation) => void;
 }
 
 /** LibraryImagePickerProps 是图片选择器组件的属性，应用壳把它注入到商品发布页。 */

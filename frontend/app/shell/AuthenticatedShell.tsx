@@ -4,6 +4,7 @@ import Sidebar from '../../shared/ui/Sidebar';
 import { useChatTitleNotification } from '../features/chat/titleNotification';
 import { getHealth } from '../features/system/api';
 import type { BuildInfo } from '../features/system/types';
+import type { LibraryLocationPickerSlotProps } from '../features/library/types';
 
 // DeliveryRuleTarget 描述商品页跳转到自动化规则页时需要携带的目标信息。
 export interface DeliveryRuleTarget {
@@ -59,6 +60,12 @@ const ItemAISettingsModal = lazy(/* 商品 AI 弹窗随商品页面路由加载�
 const LibraryImagePicker = lazy(/* 图片库选择器随商品页面路由按需加载。 */ () => import('../features/library/components/LibraryImagePicker'));
 // ResourceLibrary 是按需加载的本地资源库页面（商品模板与图片库）。
 const ResourceLibrary = lazy(/* ResourceLibrary 页面按路由激活时加载。 */ () => import('../features/library/pages/ResourceLibrary'));
+// LibraryLocationPicker 把商品功能的手动发货地选择器适配为资源库插槽：确认回调把 snake_case 高德结果转成资源库的驼峰模型。
+const LibraryLocationPicker = lazy(/* 发货地选择器随资源库页面路由按需加载。 */ () => import('../features/items/components/ManualLocationPicker').then(/* module 提供手动发货地选择器组件。 */ module => ({
+  default: /* 适配器把 items 选择器的 snake_case 结果转为资源库的驼峰模型。 */ function LibraryLocationPickerAdapter(props: LibraryLocationPickerSlotProps) {
+    return <module.ManualLocationPicker open={props.open} onClose={props.onClose} onConfirm={/* 确认时转换字段命名。 */ location => props.onConfirm({ province: location.province, city: location.city, area: location.area, divisionId: location.division_id, longitude: location.longitude, latitude: location.latitude, poiId: location.poi_id, poiName: location.poi_name })} />;
+  },
+})));
 // Settings 是按需加载的系统设置页面，仅在管理员访问时加载。
 const Settings = lazy(/* Settings 页面按路由激活时加载。 */ () => import('../features/settings/pages/Settings'));
 // Rules 是按需加载的自动化规则页面，避免首屏载入规则编辑器代码。
@@ -133,7 +140,7 @@ export const AppContent: React.FC<AppContentProps> = ({
         auditPanel={AutomationAuditPanel}
       />;
       case 'delivery-templates': return <DeliveryTemplates />;
-      case 'library': return <ResourceLibrary onBatchStarted={onNavigateToItems} />;
+      case 'library': return <ResourceLibrary onBatchStarted={onNavigateToItems} locationPicker={LibraryLocationPicker} />;
       case 'sourcing': return <SourcingInsights />;
       case 'notifications': return <Notifications isAdmin={isAdmin} />;
       case 'logs': return isAdmin ? <RuntimeLogs /> : <Dashboard />;

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import * as api from '../api';
-import type { ProductTemplate } from '../types';
+import type { LibraryLocationPickerSlotProps, ProductTemplate } from '../types';
 import { TemplatePublishDialog } from './TemplatePublishDialog';
 
 vi.mock('../api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../api')>()), previewTemplatePublish: vi.fn(), startPublishBatch: vi.fn() }));
@@ -75,5 +75,35 @@ describe('TemplatePublishDialog', /* 先预检再确认的发布流程。 */ () 
     fireEvent.click(screen.getByLabelText('只看需修正'));
     expect(screen.queryByText('正常行')).toBeNull();
     expect(screen.getByText('问题行')).toBeTruthy();
+  });
+
+  test('选择发货地后预检携带完整位置，清除后省略', /* 发货地流转。 */ async () => {
+    vi.mocked(api.previewTemplatePublish).mockResolvedValue({ previewId: 'p', total: 1, valid: 1, invalid: 0, rows: [{ rowNo: 1, valid: true, errors: [], cookieId: 'a1', title: '标题Z', price: '1', quantity: 1 }] });
+    // picker 是注入的发货地选择器替身，点确认按钮返回固定 POI。
+    const picker = ({ open, onConfirm }: LibraryLocationPickerSlotProps) => (
+      open ? <button type="button" onClick={/* 确认选择。 */ () => onConfirm({ province: '广东省', city: '深圳市', area: '南山区', divisionId: '440305', longitude: 113.9, latitude: 22.5, poiId: 'B001', poiName: '科技园' })}>确认地点</button> : null
+    );
+    render(<TemplatePublishDialog templates={[template]} accounts={accounts} locationPicker={picker} onClose={vi.fn()} onStarted={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('店铺1'));
+    // 未选择发货地时预检请求省略 location。
+    fireEvent.click(screen.getByText('生成预检'));
+    await waitFor(/* 等待预检完成。 */ () => expect(screen.getByText('标题Z')).toBeTruthy());
+    expect(api.previewTemplatePublish).toHaveBeenLastCalledWith(expect.objectContaining({ location: undefined }), expect.anything());
+    // 选择发货地后旧预检失效，再次预检携带完整 8 字段。
+    fireEvent.click(screen.getByText('选择发货地（可选）'));
+    fireEvent.click(screen.getByText('确认地点'));
+    expect(screen.getByText(/广东省 深圳市 南山区 科技园/)).toBeTruthy();
+    expect(screen.queryByText('标题Z')).toBeNull();
+    fireEvent.click(screen.getByText('生成预检'));
+    await waitFor(/* 等待新预检完成。 */ () => expect(screen.getByText('标题Z')).toBeTruthy());
+    expect(api.previewTemplatePublish).toHaveBeenLastCalledWith(expect.objectContaining({
+      location: { province: '广东省', city: '深圳市', area: '南山区', divisionId: '440305', longitude: 113.9, latitude: 22.5, poiId: 'B001', poiName: '科技园' },
+    }), expect.anything());
+    // 清除发货地回到账号默认语义。
+    fireEvent.click(screen.getByText('清除，改用账号默认'));
+    expect(screen.queryByText(/科技园/)).toBeNull();
+    fireEvent.click(screen.getByText('生成预检'));
+    await waitFor(/* 等待预检完成。 */ () => expect(screen.getByText('标题Z')).toBeTruthy());
+    expect(api.previewTemplatePublish).toHaveBeenLastCalledWith(expect.objectContaining({ location: undefined }), expect.anything());
   });
 });
