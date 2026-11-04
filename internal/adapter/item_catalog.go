@@ -131,7 +131,7 @@ func catalogItemsFromRows(rows []db.ItemInfoRow) []itemapp.CatalogItem {
 	items := make([]itemapp.CatalogItem, 0, len(rows))
 	// row 表示当前待转换的数据库商品行。
 	for _, row := range rows {
-		items = append(items, itemapp.CatalogItem{ID: row.ID, CookieID: row.CookieID, ItemID: row.ItemID, ItemTitle: row.ItemTitle, ItemDescription: row.ItemDescription, ItemCategory: row.ItemCategory, ItemPrice: row.ItemPrice, ItemDetail: row.ItemDetail, IsMultiSpec: row.IsMultiSpec, MultiQuantityDelivery: row.MultiQuantityDelivery, AIOverride: row.AIOverride})
+		items = append(items, itemapp.CatalogItem{ID: row.ID, CookieID: row.CookieID, ItemID: row.ItemID, ItemTitle: row.ItemTitle, ItemDescription: row.ItemDescription, ItemCategory: row.ItemCategory, ItemPrice: row.ItemPrice, ItemDetail: row.ItemDetail, IsMultiSpec: row.IsMultiSpec, MultiQuantityDelivery: row.MultiQuantityDelivery, AIOverride: row.AIOverride, Status: row.Status})
 	}
 	return items
 }

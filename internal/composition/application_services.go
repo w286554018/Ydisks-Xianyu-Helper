@@ -74,6 +74,8 @@ type Services struct {
 	// itemBatchPreviewPersistence 是预检结果持久化应用服务。
 	itemBatchPreviewPersistence *itemapp.BatchPreviewPersistenceService
 	itemCopyPublish             *itemapp.CopyPublishService
+	// itemLifecycle 是商品平台下架/删除服务。
+	itemLifecycle *itemapp.ItemLifecycleService
 	// itemBatchLocalPublish 是远端发布成功后的本地商品与规则收口服务。
 	itemBatchLocalPublish *itemapp.BatchLocalPublishService
 	// itemSync 是商品全量和分页同步应用服务。
@@ -332,23 +334,25 @@ type TransportPorts struct {
 	ItemCatalogMutation         *itemapp.CatalogMutationService
 	ItemAISettings              *itemapp.ItemAISettingsService
 	ItemCopyPublish             *itemapp.CopyPublishService
-	AccountLogin                AccountLogin
-	QRLogin                     adapter.QRLoginService
-	PlatformCredentials         *accountapp.PlatformCredentialService
-	Authentication              *accountapp.AuthenticationService
-	LoginAudit                  *accountapp.LoginAuditService
-	PasswordLogin               *accountapp.PasswordLoginService
-	AccountDelete               *accountapp.DeleteService
-	AccountProfile              *accountapp.ProfileService
-	AccountLongLogin            *accountapp.LongLoginService
-	AccountSettings             *accountapp.SettingsService
-	AccountRuntime              *accountapp.RuntimeService
-	AccountSummaries            *accountapp.SummaryService
-	AccountTasks                *automationapp.Service
-	Chat                        *chatapp.Service
-	UncertainNotifications      *notificationsapp.Service
-	NotificationChannels        *notificationsapp.ChannelService
-	Analytics                   *analyticsapp.Service
+	// ItemLifecycle 是商品平台下架/删除服务。
+	ItemLifecycle          *itemapp.ItemLifecycleService
+	AccountLogin           AccountLogin
+	QRLogin                adapter.QRLoginService
+	PlatformCredentials    *accountapp.PlatformCredentialService
+	Authentication         *accountapp.AuthenticationService
+	LoginAudit             *accountapp.LoginAuditService
+	PasswordLogin          *accountapp.PasswordLoginService
+	AccountDelete          *accountapp.DeleteService
+	AccountProfile         *accountapp.ProfileService
+	AccountLongLogin       *accountapp.LongLoginService
+	AccountSettings        *accountapp.SettingsService
+	AccountRuntime         *accountapp.RuntimeService
+	AccountSummaries       *accountapp.SummaryService
+	AccountTasks           *automationapp.Service
+	Chat                   *chatapp.Service
+	UncertainNotifications *notificationsapp.Service
+	NotificationChannels   *notificationsapp.ChannelService
+	Analytics              *analyticsapp.Service
 	// Sourcing 是选品参考应用服务；nil 表示功能未启用。
 	Sourcing          *sourcingapp.Service
 	AutomationIssues  *automationapp.IssueService
@@ -583,6 +587,7 @@ func New(dependencies Dependencies) (*Services, error) {
 		itemCategoryRecommendation:  catalogServices.categoryRecommendation,
 		itemBatchPreviewPersistence: catalogServices.previewPersistence,
 		itemCopyPublish:             catalogServices.copyPublish,
+		itemLifecycle:               catalogServices.lifecycle,
 		itemBatchLocalPublish:       batchServices.localPublish,
 		itemSync: itemapp.NewSyncService(dependencies.ItemDependencies.NewItemSyncRepository(dependencies.MTopClient, dependencies.Logger, dependencies.UpdateRunningCookie, func(ctx context.Context, cookieID string, err error) {
 			if sessionRecovery != nil {

@@ -924,3 +924,13 @@ func (m *Manager) getInstanceInternal(cookieID string) (*managedAccount, bool) {
 	ma, ok := m.accounts[cookieID]
 	return ma, ok
 }
+
+// FakeMtopDownshelfItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeMtop) DownshelfItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// FakeMtopDeleteItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeMtop) DeleteItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}

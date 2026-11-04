@@ -9,6 +9,13 @@ ItemAISettings,
 ItemCopyPreview,
 ItemCopyTaskResult,
 ItemDetailResponse,
+ItemLifecycleAction,
+ItemLifecycleBatch,
+ItemLifecycleBatchDetail,
+ItemLifecycleCreateResult,
+ItemLifecycleRetryResult,
+ItemLifecycleStatusResult,
+ItemLifecycleTarget,
 ItemPublishBatchPreviewResponse,
 ItemPublishBatchResponse,
 ItemPublishResponse,ItemSyncResponse,
@@ -315,3 +322,30 @@ export const createItemCopyTask = async (form: {
     signal,
   }), options) as unknown as Promise<ItemCopyTaskResult>;
 };
+
+// createItemLifecycleBatch 创建商品下架/删除批次；单商品操作也走 1 行批次。
+export const createItemLifecycleBatch = async (action: ItemLifecycleAction, targets: ItemLifecycleTarget[], options?: RequestControlOptions): Promise<ItemLifecycleCreateResult> => {
+  return runContractRequest(/* signal 控制生命周期批次创建请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/lifecycle', { body: { action, items: targets } as never, signal }), options) as unknown as Promise<ItemLifecycleCreateResult>;
+}
+
+// getItemLifecycleBatch 读取生命周期批次详情（批次头加行明细）。
+export const getItemLifecycleBatch = async (batchId: string, options?: RequestControlOptions): Promise<ItemLifecycleBatchDetail> => {
+  return runContractRequest(/* signal 控制生命周期批次读取请求的取消和超时。 */ signal => contractClient.GET('/api/v1/items/lifecycle-batches/{batch_id}', { params: { path: { batch_id: batchId } }, signal }), options) as unknown as Promise<ItemLifecycleBatchDetail>;
+}
+
+// listItemLifecycleBatches 读取最近的生命周期批次列表。
+export const listItemLifecycleBatches = async (options?: RequestControlOptions): Promise<ItemLifecycleBatch[]> => {
+  // res 是批次列表原始响应，按集合键归一为数组。
+  const res = await runContractRequest(/* signal 控制生命周期批次列表读取的取消和超时。 */ signal => contractClient.GET('/api/v1/items/lifecycle-batches', { signal }), options) as unknown;
+  return collectionFrom<ItemLifecycleBatch>(res, ['data', 'items']);
+}
+
+// retryFailedItemLifecycleBatch 重试生命周期批次内的失败行并重新执行。
+export const retryFailedItemLifecycleBatch = async (batchId: string, options?: RequestControlOptions): Promise<ItemLifecycleRetryResult> => {
+  return runContractRequest(/* signal 控制生命周期批次重试请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/lifecycle-batches/{batch_id}/retry-failed', { params: { path: { batch_id: batchId } }, body: {} as never, signal }), options) as unknown as Promise<ItemLifecycleRetryResult>;
+}
+
+// cancelItemLifecycleBatch 取消仍在执行的生命周期批次。
+export const cancelItemLifecycleBatch = async (batchId: string, options?: RequestControlOptions): Promise<ItemLifecycleStatusResult> => {
+  return runContractRequest(/* signal 控制生命周期批次取消请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/lifecycle-batches/{batch_id}/cancel', { params: { path: { batch_id: batchId } }, body: {} as never, signal }), options) as unknown as Promise<ItemLifecycleStatusResult>;
+}

@@ -65,6 +65,10 @@ type Client interface {
 	FetchAllItems(ctx context.Context, cookiesStr string, pageSize, maxPages int) (*ItemListResult, error)
 	PublishItem(ctx context.Context, cookiesStr string, req PublishItemRequest) (*PublishItemResult, error)
 	RefreshTokenWithDeviceIDContext(ctx context.Context, cookiesStr, deviceID string) (*RefreshResult, error)
+	// DownshelfItemContext 调用平台商品下架接口；ok=false 且 err=nil 表示业务拒绝。
+	DownshelfItemContext(ctx context.Context, cookiesStr, itemID string) (ok bool, ret []string, updatedCookies string, err error)
+	// DeleteItemContext 调用平台商品删除接口；参数与返回同下架。
+	DeleteItemContext(ctx context.Context, cookiesStr, itemID string) (ok bool, ret []string, updatedCookies string, err error)
 }
 
 // ClientImpl 是 Client 接口的 HTTP 实现。零值可用；HTTP 超时默认 30s。
@@ -91,6 +95,10 @@ type ClientImpl struct {
 	ChatUserQueryURL    string
 	// ChatItemSearchURL 允许测试将聊天商品查询指向本地 HTTP 服务；生产空值使用官方端点。
 	ChatItemSearchURL string
+	// DownshelfItemURL 覆盖商品下架端点，仅供测试注入本地 HTTP 服务；生产空值使用官方端点。
+	DownshelfItemURL string
+	// DeleteItemURL 覆盖商品删除端点，仅供测试注入本地 HTTP 服务；生产空值使用官方端点。
+	DeleteItemURL string
 	// Pacer 是账号级请求节拍器；为空时使用进程共享的默认节拍器，测试可注入确定性实现。
 	Pacer *Pacer
 }

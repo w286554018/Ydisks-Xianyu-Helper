@@ -2,8 +2,10 @@ package adapter
 
 import (
 	"context"
+
 	"errors"
 	"log/slog"
+	"xianyu-go/internal/xianyu/mtop"
 
 	"xianyu-go/internal/db"
 )
@@ -26,6 +28,22 @@ func NewItemDependencies(store *db.Store) (*ItemDependencies, error) {
 // NewItemCopySourceStore 创建复制发布使用的商品快照读取仓储。
 func (d *ItemDependencies) NewItemCopySourceStore() *db.Items {
 	return d.store.Items
+}
+
+// Store 暴露数据库入口给组合层构造生命周期仓储适配器；不向应用层泄漏 SQL 细节。
+func (d *ItemDependencies) Store() *db.Store {
+	if d == nil {
+		return nil
+	}
+	return d.store
+}
+
+// NewItemLifecyclePlatformPort 创建生命周期平台端口；凭证读取与会话回写由内部封装。
+func (d *ItemDependencies) NewItemLifecyclePlatformPort(client func() mtop.Client, updateRunningCookie func(context.Context, string, string)) (*ItemLifecyclePlatformPort, error) {
+	if d == nil {
+		return nil, errors.New("商品依赖未初始化")
+	}
+	return NewItemLifecyclePlatformPort(d.store, client, updateRunningCookie)
 }
 
 // NewItemBatchRepository 创建批量发布状态仓储。

@@ -1694,3 +1694,23 @@ func TestReloadCookieFromDBUsesRuntimeData(t *testing.T) {
 		t.Fatalf("runtime credential fingerprint=%q", currentFP)
 	}
 }
+
+// RiskCountingMTopDownshelfItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *riskCountingMTop) DownshelfItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// RiskCountingMTopDeleteItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *riskCountingMTop) DeleteItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// responseCookieRiskMTopDownshelfItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *responseCookieRiskMTop) DownshelfItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// responseCookieRiskMTopDeleteItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *responseCookieRiskMTop) DeleteItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}

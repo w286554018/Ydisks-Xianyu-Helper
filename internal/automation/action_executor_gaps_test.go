@@ -161,3 +161,13 @@ func TestActionExecutorTextGapBranches(t *testing.T) {
 		t.Fatalf("离线应为确定未发送: %v", sendErr)
 	}
 }
+
+// FakeMTopDownshelfItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeMTop) DownshelfItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// FakeMTopDeleteItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeMTop) DeleteItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}

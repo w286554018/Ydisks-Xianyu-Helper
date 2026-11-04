@@ -103,6 +103,8 @@ type itemCatalogServices struct {
 	singlePublish *itemapp.Service
 	// copyPublish 提供跨账号复制发布服务。
 	copyPublish *itemapp.CopyPublishService
+	// lifecycle 提供商品平台下架/删除服务。
+	lifecycle *itemapp.ItemLifecycleService
 }
 
 // buildItemCatalogServices 构造商品目录和发布服务，并把平台会话恢复回调限制在组合根。
@@ -167,5 +169,17 @@ func buildItemCatalogServices(dependencies Dependencies, sessionRecovery adapter
 	if itemCopyPublishErr != nil {
 		return itemCatalogServices{}, fmt.Errorf("构造复制发布服务失败: %w", itemCopyPublishErr)
 	}
-	return itemCatalogServices{catalog: itemCatalog, mutation: itemCatalogMutation, aiSettings: itemAISettings, categoryRecommendation: itemCategoryRecommendation, previewPersistence: itemBatchPreviewPersistence, singlePublish: itemSinglePublish, copyPublish: itemCopyPublish}, nil
+	// itemLifecyclePlatform 是生命周期平台端口适配器。
+	itemLifecyclePlatform, itemLifecyclePlatformErr := dependencies.ItemDependencies.NewItemLifecyclePlatformPort(dependencies.MTopClient, dependencies.UpdateRunningCookie)
+	if itemLifecyclePlatformErr != nil {
+		return itemCatalogServices{}, fmt.Errorf("构造生命周期平台端口失败: %w", itemLifecyclePlatformErr)
+	}
+	// itemLifecycle 是商品平台下架/删除服务；错误分类决定批次风控即停行为。
+	itemLifecycle, itemLifecycleErr := itemapp.NewItemLifecycleService(
+		adapter.NewItemLifecycleStoreAdapter(dependencies.ItemDependencies.Store()),
+		itemLifecyclePlatform, previewPort, adapter.ClassifyLifecyclePlatformError)
+	if itemLifecycleErr != nil {
+		return itemCatalogServices{}, fmt.Errorf("构造商品生命周期服务失败: %w", itemLifecycleErr)
+	}
+	return itemCatalogServices{catalog: itemCatalog, mutation: itemCatalogMutation, aiSettings: itemAISettings, categoryRecommendation: itemCategoryRecommendation, previewPersistence: itemBatchPreviewPersistence, singlePublish: itemSinglePublish, copyPublish: itemCopyPublish, lifecycle: itemLifecycle}, nil
 }

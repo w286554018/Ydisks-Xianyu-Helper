@@ -449,6 +449,8 @@ type ApplicationPorts struct {
 	itemBatchLocalPublish ItemBatchLocalPublishPort
 	// itemCopyPublish 是跨账号复制发布用例。
 	itemCopyPublish ItemCopyPublishPort
+	// itemLifecycle 是商品平台下架/删除用例。
+	itemLifecycle ItemLifecyclePort
 	// itemSync 是商品同步用例。
 	itemSync ItemSyncPort
 	// itemCatalog 是商品目录读取用例。
@@ -537,34 +539,36 @@ type ApplicationPortsInput struct {
 	ItemBatchPreviewPersistence ItemBatchPreviewPersistencePort
 	ItemBatchLocalPublish       ItemBatchLocalPublishPort
 	ItemCopyPublish             ItemCopyPublishPort
-	ItemSync                    ItemSyncPort
-	ItemCatalog                 ItemCatalogPort
-	ItemCatalogMutation         ItemCatalogMutationPort
-	ItemAISettings              ItemAISettingsPort
-	AccountLogin                AccountLoginPort
-	QRLogin                     QRLoginPort
-	SessionRecovery             SessionRecoveryPort
-	PlatformCredentials         PlatformCredentialPort
-	Authentication              AuthenticationPort
-	LoginAudit                  LoginAuditPort
-	PasswordLogin               PasswordLoginPort
-	AccountDelete               AccountDeletePort
-	AccountProfile              AccountProfilePort
-	AccountLongLogin            AccountLongLoginPort
-	AccountSettings             AccountSettingsPort
-	AccountRuntime              AccountRuntimePort
-	AccountSummaries            AccountSummaryPort
-	AccountTasks                AccountTasksPort
-	Chat                        ChatPort
-	UncertainNotifications      UncertainNotificationsPort
-	NotificationChannels        NotificationChannelsPort
-	Analytics                   AnalyticsPort
-	Sourcing                    SourcingPort
-	AutomationIssues            AutomationIssuesPort
-	AutomationAudit             AutomationAuditPort
-	AutomationRules             AutomationRulesPort
-	DeliveryTemplates           DeliveryTemplatesPort
-	Cards                       CardsPort
+	// ItemLifecycle 是商品平台下架/删除用例。
+	ItemLifecycle          ItemLifecyclePort
+	ItemSync               ItemSyncPort
+	ItemCatalog            ItemCatalogPort
+	ItemCatalogMutation    ItemCatalogMutationPort
+	ItemAISettings         ItemAISettingsPort
+	AccountLogin           AccountLoginPort
+	QRLogin                QRLoginPort
+	SessionRecovery        SessionRecoveryPort
+	PlatformCredentials    PlatformCredentialPort
+	Authentication         AuthenticationPort
+	LoginAudit             LoginAuditPort
+	PasswordLogin          PasswordLoginPort
+	AccountDelete          AccountDeletePort
+	AccountProfile         AccountProfilePort
+	AccountLongLogin       AccountLongLoginPort
+	AccountSettings        AccountSettingsPort
+	AccountRuntime         AccountRuntimePort
+	AccountSummaries       AccountSummaryPort
+	AccountTasks           AccountTasksPort
+	Chat                   ChatPort
+	UncertainNotifications UncertainNotificationsPort
+	NotificationChannels   NotificationChannelsPort
+	Analytics              AnalyticsPort
+	Sourcing               SourcingPort
+	AutomationIssues       AutomationIssuesPort
+	AutomationAudit        AutomationAuditPort
+	AutomationRules        AutomationRulesPort
+	DeliveryTemplates      DeliveryTemplatesPort
+	Cards                  CardsPort
 	// RuntimeLogs 是管理员运行日志查询用例。
 	RuntimeLogs            RuntimeLogsPort
 	APIRequestTester       APIRequestTesterPort
@@ -585,6 +589,7 @@ func NewApplicationPorts(input ApplicationPortsInput) *ApplicationPorts {
 		itemBatchManagement: input.ItemBatchManagement, itemCategoryRecommendation: input.ItemCategoryRecommendation,
 		itemBatchPreviewPersistence: input.ItemBatchPreviewPersistence, itemBatchLocalPublish: input.ItemBatchLocalPublish,
 		itemCopyPublish: input.ItemCopyPublish,
+		itemLifecycle:   input.ItemLifecycle,
 		itemSync:        input.ItemSync, itemCatalog: input.ItemCatalog, itemCatalogMutation: input.ItemCatalogMutation, itemAISettings: input.ItemAISettings,
 		accountLogin: input.AccountLogin, qrLogin: input.QRLogin, sessionRecovery: input.SessionRecovery,
 		platformCredentials: input.PlatformCredentials, authentication: input.Authentication, loginAudit: input.LoginAudit,

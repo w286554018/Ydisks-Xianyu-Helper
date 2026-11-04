@@ -1,4 +1,4 @@
-import { ArrowRight,Bot,Box,CheckCircle2,CircleDashed,Copy,Edit,Filter,Link2,LocateFixed,PackagePlus,Plus,RefreshCw,Save,Search,ShoppingBag,Trash2,UploadCloud,User,X } from 'lucide-react';
+import { Archive,ArrowRight,Bot,Box,CheckCircle2,CircleDashed,Copy,Edit,Filter,Link2,LocateFixed,PackagePlus,Plus,RefreshCw,Save,Search,ShoppingBag,Trash2,UploadCloud,User,X } from 'lucide-react';
 import React,{ Suspense,useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AccountDetail,Item,ItemAIOverride,ItemAISettings,PublishLocation,ShippingRule } from '../api';
@@ -8,6 +8,9 @@ getItemPublishBatches,
 getItems,
 getShippingRules,
 } from '../api';
+import type { ItemLifecycleAction } from '../api';
+import { useItemLifecycle } from '../lifecycle';
+import { ItemLifecycleBatchModal,ItemLifecycleConfirmModal } from '../components/ItemLifecycleModals';
 import { batchStatusClass,batchStatusText } from '../batchState';
 import { BatchPhaseIndicator } from '../components/BatchPhaseIndicator';
 import ItemTable from '../components/ItemTable';
@@ -143,6 +146,30 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
   // copyState 是跨账号复制发布的状态与动作边界；创建成功后跳既有批次进度。
   const copyState = useItemCopyPublish({ onTaskCreated: openBatchResultByID });
 
+  // lifecycleState 是商品平台下架/删除的确认、批次进度与轮询边界。
+  const lifecycleState = useItemLifecycle({ loadItems });
+  // selectedItemKeys 保存列表模式下勾选商品的选择键集合；批量下架/删除按钮由它驱动。
+  const [selectedItemKeys, setSelectedItemKeys] = useState<string[]>([]);
+  // toggleSelectedItem 切换一个商品的勾选状态。
+  const toggleSelectedItem = useCallback(/* toggleSelectAction 在勾选集合上做增删。 */ (item: Item) => {
+    // rowKey 是该商品的稳定选择键。
+    const rowKey = `${item.cookie_id}-${item.item_id}`;
+    setSelectedItemKeys(/* previous 是切换前的勾选集合。 */ previous => (
+      previous.includes(rowKey) ? previous.filter(/* keptKey 保留未命中的选择键。 */ key => key !== rowKey) : [...previous, rowKey]
+    ));
+  }, []);
+  // selectedItems 把勾选键映射回完整商品对象，供批量操作提交。
+  const selectedItems = useMemo(
+    /* selectedItemsSelector 从完整列表里取出勾选中的商品。 */ () => items.filter(/* checkedItem 只保留勾选中的商品。 */ item => selectedItemKeys.includes(`${item.cookie_id}-${item.item_id}`)),
+    [items, selectedItemKeys],
+  );
+  // clearSelection 清空当前勾选集合。
+  const clearSelection = useCallback(/* clearSelectAction 清空勾选集合。 */ () => setSelectedItemKeys([]), []);
+  // openBatchLifecycle 打开批量下架/删除确认；提交成功后清空勾选。
+  const openBatchLifecycle = useCallback(/* openBatchLifecycleAction 打开批量生命周期确认弹窗。 */ (action: ItemLifecycleAction) => {
+    lifecycleState.openLifecycleConfirm(action, selectedItems);
+  }, [lifecycleState, selectedItems]);
+
   // itemActions 商品 feature 提供普通商品操作、发布表单和定位动作。
   const itemActions = useItemActions({
     selectedAccount,
@@ -185,7 +212,6 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
     handleSync,
     handleEdit,
     handleSaveEdit,
-    handleDelete,
     handleAddItem,
     handlePublishItem,
     handleRecommendPublishCategory,
@@ -194,6 +220,11 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
     openPublishModal,
     locateForPublish,
   } = itemActions;
+
+  // 批次创建成功后清空批量勾选，避免残留勾选指向已处理商品。
+  useEffect(/* batchCreatedSelectionCleanup 在生命周期批次创建成功后清空勾选。 */ () => {
+    if (lifecycleState.lifecycleBatchOpen) setSelectedItemKeys([]);
+  }, [lifecycleState.lifecycleBatchOpen]);
 
   // ManualLocationTarget 表示手动地点选择完成后要回填的发布流程。
   type ManualLocationTarget = 'publish' | 'batch';
@@ -410,6 +441,14 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
 
       {viewMode === 'list' ? (
         <div className="space-y-4">
+          {selectedItems.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-gray-900 px-4 py-3 text-sm font-bold text-white">
+              <span>已选 {selectedItems.length} 件商品</span>
+              <button type="button" onClick={/* 点击批量下架所选商品。 */ () => openBatchLifecycle('downshelf')} className="rounded-lg bg-white/10 px-3 py-1.5 hover:bg-white/20">批量下架</button>
+              <button type="button" onClick={/* 点击批量删除所选商品。 */ () => openBatchLifecycle('delete')} className="rounded-lg bg-red-600 px-3 py-1.5 hover:bg-red-700">批量删除</button>
+              <button type="button" onClick={clearSelection} className="ml-auto rounded-lg bg-white/10 px-3 py-1.5 hover:bg-white/20">清除选择</button>
+            </div>
+          )}
           <ItemTable
             items={pagedItems.rows}
             rules={shippingRules}
@@ -420,7 +459,10 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
             onConfigureDelivery={onConfigureDelivery}
             onOpenAISettings={setItemAISettingsTarget}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onDownshelf={/* 点击单件下架并打开确认弹窗。 */ item => lifecycleState.openLifecycleConfirm('downshelf', [item])}
+            onDelete={/* 点击单件删除并打开确认弹窗。 */ item => lifecycleState.openLifecycleConfirm('delete', [item])}
+            selectedKeys={selectedItemKeys}
+            onToggleSelect={toggleSelectedItem}
             emptyText={ruleFilter ? '没有符合该规则筛选条件的商品' : accountFilter ? '该账号暂无商品数据' : '暂无商品数据，请选择账号进行同步'}
           />
           {pagedItems.totalPages > 1 && (
@@ -442,25 +484,40 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
             const deliveryRuleCount = linkedRules.filter(/* rule 是关联规则。 */ rule => rule.trigger_type === 'order_paid').length;
             // aiOverride 是列表 DTO 提供的商品级 AI 摘要状态，缺省时按继承账号处理。
             const aiOverride = item.ai_override || 'inherit';
+            // isDown 表示当前商品是否已在本地下架。
+            const isDown = item.status === 'down';
             return (
               <div key={`${item.cookie_id}-${item.item_id}`} className="ios-card p-3 rounded-2xl hover:shadow-lg transition-all group relative flex flex-col">
                   <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      {!isDown && (
+                        <button
+                          onClick={/* 点击打开该商品的跨账号复制发布。 */ () => copyState.openCopyModal(item)}
+                          className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md text-gray-600 hover:bg-brand hover:text-white transition-colors"
+                          title="复制到其他账号"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {!isDown && (
+                        <button
+                          onClick={/* 当前回调处理用户交互或异步状态变化。 */ () => handleEdit(item)}
+                          className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md text-gray-600 hover:bg-brand hover:text-white transition-colors"
+                          title="编辑"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {!isDown && (
+                        <button
+                          onClick={/* 点击打开该商品的下架确认。 */ () => lifecycleState.openLifecycleConfirm('downshelf', [item])}
+                          className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md text-gray-600 hover:bg-amber-100 hover:text-amber-700 transition-colors"
+                          title="下架"
+                        >
+                          <Archive className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
-                        onClick={/* 点击打开该商品的跨账号复制发布。 */ () => copyState.openCopyModal(item)}
-                        className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md text-gray-600 hover:bg-brand hover:text-white transition-colors"
-                        title="复制到其他账号"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={/* 当前回调处理用户交互或异步状态变化。 */ () => handleEdit(item)}
-                        className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md text-gray-600 hover:bg-brand hover:text-white transition-colors"
-                        title="编辑"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={/* 当前回调处理用户交互或异步状态变化。 */ () => handleDelete(item)}
+                        onClick={/* 点击打开该商品的删除确认。 */ () => lifecycleState.openLifecycleConfirm('delete', [item])}
                         className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-md hover:bg-red-100 text-red-500 transition-colors"
                         title="删除"
                       >
@@ -475,8 +532,9 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
                               <Box className="w-8 h-8" />
                           </div>
                       )}
-                      <div className="absolute top-1.5 left-1.5 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                          {formatItemPrice(item.item_price)}
+                      <div className="absolute top-1.5 left-1.5 flex gap-1">
+                          <span className="bg-black/50 backdrop-blur-md text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">{formatItemPrice(item.item_price)}</span>
+                          {isDown && <span className="bg-gray-800/80 backdrop-blur-md text-gray-100 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md">已下架</span>}
                       </div>
                   </div>
                   <h3 className="font-bold text-gray-900 line-clamp-2 text-xs mb-1.5 h-8 leading-4">{item.item_title}</h3>
@@ -1137,6 +1195,26 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
         onClose={/* manualLocationCloseAction 关闭手动地点弹窗并释放高德查询。 */ () => setManualLocationTarget(null)}
         onConfirm={confirmManualLocation}
       />
+      {lifecycleState.confirmRequest && createPortal(
+        <ItemLifecycleConfirmModal
+          request={lifecycleState.confirmRequest}
+          submitting={lifecycleState.lifecycleSubmitting}
+          error={lifecycleState.lifecycleError}
+          onClose={lifecycleState.closeLifecycleConfirm}
+          onSubmit={/* 点击确认提交下架/删除批次。 */ () => void lifecycleState.submitLifecycleConfirm()}
+        />,
+        document.body,
+      )}
+      {lifecycleState.lifecycleBatchOpen && createPortal(
+        <ItemLifecycleBatchModal
+          batch={lifecycleState.lifecycleBatch}
+          busy={lifecycleState.lifecycleBusy}
+          onClose={lifecycleState.closeLifecycleBatch}
+          onCancel={/* 点击请求取消当前批次。 */ () => void lifecycleState.cancelLifecycleBatch()}
+          onRetry={/* 点击重试批次内失败行。 */ () => void lifecycleState.retryLifecycleFailed()}
+        />,
+        document.body,
+      )}
       {ItemAISettingsModal && itemAISettingsTarget && (
         <Suspense fallback={null}>
           <ItemAISettingsModal

@@ -3828,6 +3828,212 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/lifecycle":
+    post:
+      operationId: postApiV1ItemsLifecycle
+      summary: postApiV1ItemsLifecycle
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemLifecycleCreateRequest'
+      responses:
+        '201':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemLifecycleCreateResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/lifecycle-batches":
+    get:
+      operationId: getApiV1ItemsLifecycleBatches
+      summary: getApiV1ItemsLifecycleBatches
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemLifecycleBatch'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/lifecycle-batches/{batch_id}":
+    get:
+      operationId: getApiV1ItemsLifecycleBatchesBatchId
+      summary: getApiV1ItemsLifecycleBatchesBatchId
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: batch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemLifecycleBatchDetail'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/lifecycle-batches/{batch_id}/retry-failed":
+    post:
+      operationId: postApiV1ItemsLifecycleBatchesBatchIdRetryFailed
+      summary: postApiV1ItemsLifecycleBatchesBatchIdRetryFailed
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: batch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemLifecycleRetryResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/lifecycle-batches/{batch_id}/cancel":
+    post:
+      operationId: postApiV1ItemsLifecycleBatchesBatchIdCancel
+      summary: postApiV1ItemsLifecycleBatchesBatchIdCancel
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: batch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemLifecycleStatusResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/items/{cookie_id}":
     post:
       operationId: postApiV1ItemsBycookie_id
@@ -9599,6 +9805,7 @@ components:
         multi_quantity_delivery: {type: boolean}
         is_multi_qty_ship: {type: boolean}
         ai_override: {$ref: '#/components/schemas/ItemAIOverride'}
+        status: {type: string, enum: [active, down]}
     ItemListArrayResponse:
       type: array
       items: {$ref: '#/components/schemas/ItemListResponse'}
@@ -10923,3 +11130,68 @@ components:
       properties:
         mode: {type: string}
         content: {type: string}
+    ItemLifecycleCreateRequest:
+      type: object
+      required: [action, items]
+      properties:
+        action:
+          type: string
+          enum: [downshelf, delete]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemLifecycleTarget'
+    ItemLifecycleTarget:
+      type: object
+      required: [cookie_id, item_id]
+      properties:
+        cookie_id: {type: string}
+        item_id: {type: string}
+    ItemLifecycleCreateResponse:
+      type: object
+      required: [batch_id]
+      properties:
+        batch_id: {type: string}
+    ItemLifecycleBatch:
+      type: object
+      required: [id, action, status, total_count, success_count, failed_count, created_at, updated_at]
+      properties:
+        id: {type: string}
+        action: {type: string}
+        status: {type: string}
+        total_count: {type: integer}
+        success_count: {type: integer}
+        failed_count: {type: integer}
+        created_at: {type: string}
+        updated_at: {type: string}
+    ItemLifecycleBatchRow:
+      type: object
+      required: [id, row_no, cookie_id, item_id, status]
+      properties:
+        id: {type: integer}
+        row_no: {type: integer}
+        cookie_id: {type: string}
+        item_id: {type: string}
+        status: {type: string}
+        error_message: {type: string}
+        failure_kind: {type: string}
+    ItemLifecycleBatchDetail:
+      type: object
+      required: [batch, rows]
+      properties:
+        batch:
+          $ref: '#/components/schemas/ItemLifecycleBatch'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemLifecycleBatchRow'
+    ItemLifecycleRetryResponse:
+      type: object
+      required: [reset_count]
+      properties:
+        reset_count: {type: integer}
+    ItemLifecycleStatusResponse:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: {type: boolean}

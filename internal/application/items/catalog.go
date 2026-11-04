@@ -32,6 +32,8 @@ type CatalogItem struct {
 	MultiQuantityDelivery bool
 	// AIOverride 是商品级 AI 启停覆盖状态。
 	AIOverride string
+	// Status 是平台生命周期状态：active 在售 / down 已下架。
+	Status string
 }
 
 // CatalogRepository 定义商品列表和详情读取所需的最小持久化能力。

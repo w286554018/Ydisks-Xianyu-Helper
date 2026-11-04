@@ -115,6 +115,8 @@ export interface Item {
   is_multi_qty_ship?: number | boolean;
   /** 商品级 AI 启停覆盖状态；缺省时按继承账号配置展示。 */
   ai_override?: ItemAIOverride;
+  /** 商品在本地的生命周期状态：active 在售、down 已下架；旧数据缺省视为在售。 */
+  status?: 'active' | 'down';
 }
 
 /** 商品级 AI 配置支持的三态覆盖策略。 */
@@ -507,4 +509,79 @@ export interface ItemCopyTaskResult {
   batch_id: string;
   /** 批次行数（目标账号数）。 */
   row_count: number;
+}
+
+/** 商品下架/删除生命周期动作类型。 */
+export type ItemLifecycleAction = 'downshelf' | 'delete';
+
+/** 生命周期批次目标商品。 */
+export interface ItemLifecycleTarget {
+  /** 商品归属账号标识。 */
+  cookie_id: string;
+  /** 平台商品标识。 */
+  item_id: string;
+}
+
+/** 生命周期批次头摘要。 */
+export interface ItemLifecycleBatch {
+  /** 批次唯一标识。 */
+  id: string;
+  /** 批次动作：downshelf 或 delete。 */
+  action: string;
+  /** 批次状态：pending/running/completed/partially_failed/canceled。 */
+  status: string;
+  /** 批次目标总数。 */
+  total_count: number;
+  /** 已成功行数。 */
+  success_count: number;
+  /** 已失败行数。 */
+  failed_count: number;
+  /** 批次创建时间。 */
+  created_at: string;
+  /** 批次最近更新时间。 */
+  updated_at: string;
+}
+
+/** 生命周期批次行明细。 */
+export interface ItemLifecycleBatchRow {
+  /** 行主键。 */
+  id: number;
+  /** 批次内序号。 */
+  row_no: number;
+  /** 商品归属账号标识。 */
+  cookie_id: string;
+  /** 平台商品标识。 */
+  item_id: string;
+  /** 行状态：pending/running/success/failed。 */
+  status: string;
+  /** 失败原因摘要；成功行为空。 */
+  error_message?: string;
+  /** 失败分类；成功行为空。 */
+  failure_kind?: string;
+}
+
+/** 生命周期批次详情：批次头加行明细。 */
+export interface ItemLifecycleBatchDetail {
+  /** 批次头摘要。 */
+  batch: ItemLifecycleBatch;
+  /** 行明细列表。 */
+  rows: ItemLifecycleBatchRow[];
+}
+
+/** 生命周期批次创建结果。 */
+export interface ItemLifecycleCreateResult {
+  /** 新批次标识。 */
+  batch_id: string;
+}
+
+/** 生命周期失败行重试结果。 */
+export interface ItemLifecycleRetryResult {
+  /** 重置为待执行的失败行数。 */
+  reset_count: number;
+}
+
+/** 生命周期取消动作结果。 */
+export interface ItemLifecycleStatusResult {
+  /** 取消请求是否被接受。 */
+  accepted: boolean;
 }

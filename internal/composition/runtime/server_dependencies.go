@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
 	"time"
+	itemapp "xianyu-go/internal/application/items"
 
 	"xianyu-go/internal/adapter"
 	orderapp "xianyu-go/internal/application/orders"
@@ -216,6 +218,7 @@ func ServerDependencies(services *composition.Services, base HTTPDependencies, s
 			ItemBatchManagement: ports.ItemBatchManagement, ItemCategoryRecommendation: ports.ItemCategoryRecommendation,
 			ItemBatchPreviewPersistence: ports.ItemBatchPreviewPersistence, ItemBatchLocalPublish: ports.ItemBatchLocalPublish,
 			ItemCopyPublish: ports.ItemCopyPublish,
+			ItemLifecycle:   itemLifecycleTransport{service: ports.ItemLifecycle, root: services.LifecycleContext},
 			ItemSync:        ports.ItemSync, ItemCatalog: ports.ItemCatalog, ItemCatalogMutation: ports.ItemCatalogMutation, ItemAISettings: ports.ItemAISettings,
 			AccountLogin:        accountLoginTransport{service: ports.AccountLogin},
 			QRLogin:             qrLoginTransport{service: ports.QRLogin},
@@ -230,4 +233,80 @@ func ServerDependencies(services *composition.Services, base HTTPDependencies, s
 			Keywords: ports.Keywords, Settings: ports.Settings, Admin: ports.Admin, RuntimeLogs: ports.RuntimeLogs,
 		}),
 	}, nil
+}
+
+// itemLifecycleTransport 把生命周期服务绑定到进程根 Context，保证批次执行随服务关闭而终止。
+type itemLifecycleTransport struct {
+	// service 是生命周期应用服务。
+	service server.ItemLifecyclePort
+	// root 是进程 worker 根 Context 提供者。
+	root func() context.Context
+}
+
+// CreateBatch 创建批次并用根 Context 启动后台执行。
+func (t itemLifecycleTransport) CreateBatch(ctx context.Context, userID int64, input itemapp.CreateLifecycleBatchInput) (string, error) {
+	// batchID、err 保存批次创建结果。
+	batchID, err := t.service.CreateBatch(ctx, userID, input)
+	if err != nil {
+		return "", err
+	}
+	// runCtx 优先使用进程根 Context；不可用时退回 Background。
+	runCtx := context.Background()
+	if t.root != nil {
+		// lifecycleCtx 是本次流程后续判断的lifecycleCtx。
+		if lifecycleCtx := t.root(); lifecycleCtx != nil {
+			runCtx = lifecycleCtx
+		}
+	}
+	go func() {
+		// runErr 保存批次执行错误；结束状态记录在批次表，这里只做日志提示。
+		if runErr := t.service.RunLifecycleBatch(runCtx, userID, batchID); runErr != nil {
+			slog.Warn("生命周期批次执行结束", "batch", batchID, "err", runErr)
+		}
+	}()
+	return batchID, nil
+}
+
+// GetBatch 透传批次查询。
+func (t itemLifecycleTransport) GetBatch(ctx context.Context, userID int64, batchID string) (itemapp.LifecycleBatch, []itemapp.LifecycleBatchRow, error) {
+	return t.service.GetBatch(ctx, userID, batchID)
+}
+
+// ListBatches 透传批次列表查询。
+func (t itemLifecycleTransport) ListBatches(ctx context.Context, userID int64, limit int) ([]itemapp.LifecycleBatch, error) {
+	return t.service.ListBatches(ctx, userID, limit)
+}
+
+// RetryFailed 重试失败行并用根 Context 重新执行。
+func (t itemLifecycleTransport) RetryFailed(ctx context.Context, userID int64, batchID string) (int64, error) {
+	// reset、err 保存失败行重置结果。
+	reset, err := t.service.RetryFailed(ctx, userID, batchID)
+	if err != nil || reset == 0 {
+		return reset, err
+	}
+	// runCtx 优先使用进程根 Context。
+	runCtx := context.Background()
+	if t.root != nil {
+		// lifecycleCtx 是本次流程后续判断的lifecycleCtx。
+		if lifecycleCtx := t.root(); lifecycleCtx != nil {
+			runCtx = lifecycleCtx
+		}
+	}
+	go func() {
+		// runErr 保存重试执行错误。
+		if runErr := t.service.RunLifecycleBatch(runCtx, userID, batchID); runErr != nil {
+			slog.Warn("生命周期批次重试执行结束", "batch", batchID, "err", runErr)
+		}
+	}()
+	return reset, nil
+}
+
+// Cancel 透传取消。
+func (t itemLifecycleTransport) Cancel(ctx context.Context, userID int64, batchID string) (bool, error) {
+	return t.service.Cancel(ctx, userID, batchID)
+}
+
+// RunLifecycleBatch 透传手动执行（一般不直接暴露给端点）。
+func (t itemLifecycleTransport) RunLifecycleBatch(ctx context.Context, userID int64, batchID string) error {
+	return t.service.RunLifecycleBatch(ctx, userID, batchID)
 }

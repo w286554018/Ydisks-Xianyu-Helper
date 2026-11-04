@@ -993,3 +993,23 @@ type fakeDialErr struct{}
 
 // Error 封装错误业务协调。
 func (fakeDialErr) Error() string { return "fake dial failure" }
+
+// fakeRunMtopDownshelfItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeRunMtop) DownshelfItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// fakeRunMtopDeleteItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeRunMtop) DeleteItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// fakeFailTokenMtopDownshelfItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeFailTokenMtop) DownshelfItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}
+
+// fakeFailTokenMtopDeleteItemContext 测试替身未实现生命周期调用；避免意外触达平台。
+func (f *fakeFailTokenMtop) DeleteItemContext(ctx context.Context, cookiesStr, itemID string) (bool, []string, string, error) {
+	return false, nil, "", errors.New("测试替身不支持生命周期调用")
+}

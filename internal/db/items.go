@@ -4,8 +4,38 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 )
+
+// 商品平台生命周期状态取值：active 表示在售，down 表示平台已下架。
+const (
+	// ItemStatusActive 表示商品在平台处于在售状态。
+	ItemStatusActive = "active"
+	// ItemStatusDown 表示商品已在平台下架。
+	ItemStatusDown = "down"
+)
+
+// UpdateStatus 更新账号下指定商品的平台生命周期状态。
+// status 仅接受 ItemStatusActive / ItemStatusDown；其他值视为调用方逻辑错误并返回参数错误，
+// 不做静默归一化，避免把未知状态写库。商品不存在时返回 ErrNotFound。
+func (i *Items) UpdateStatus(ctx context.Context, cookieID, itemID, status string) error {
+	if status != ItemStatusActive && status != ItemStatusDown {
+		return fmt.Errorf("status %q 不是合法的商品生命周期状态", status)
+	}
+	// res、err 保存状态更新执行结果与错误。
+	res, err := i.DB.ExecContext(ctx,
+		`UPDATE item_info SET status=?, updated_at=CURRENT_TIMESTAMP
+		 WHERE cookie_id=? AND item_id=? AND deleted_at IS NULL`, status, cookieID, itemID)
+	if err != nil {
+		return err
+	}
+	// affected、AffErr 保存受影响行数与读取该行数的错误；0 行说明商品不存在或已被软删除。
+	if affected, AffErr := res.RowsAffected(); AffErr == nil && affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
 
 // AllForCookie 返回一个账号下的全部商品持久化记录，不包含账号凭证明文。
 func (i *Items) AllForCookie(ctx context.Context, cookieID string) ([]ItemInfoRow, error) {
@@ -13,7 +43,7 @@ func (i *Items) AllForCookie(ctx context.Context, cookieID string) ([]ItemInfoRo
 	rows, err := i.DB.QueryContext(ctx,
 		`SELECT i.id, i.cookie_id, i.item_id, COALESCE(i.item_title,''), COALESCE(i.item_description,''),
 		        COALESCE(i.item_category,''), COALESCE(i.item_price,''), COALESCE(i.item_detail,''),
-		        i.is_multi_spec, COALESCE(i.multi_quantity_delivery,0), COALESCE(s.ai_override,'inherit')
+		        i.is_multi_spec, COALESCE(i.multi_quantity_delivery,0), COALESCE(s.ai_override,'inherit'), COALESCE(i.status,'active')
 		 FROM item_info i LEFT JOIN item_ai_settings s ON s.cookie_id=i.cookie_id AND s.item_id=i.item_id
 		 WHERE i.cookie_id=? AND i.deleted_at IS NULL ORDER BY i.id DESC`, cookieID)
 	if err != nil {
@@ -33,11 +63,11 @@ func (i *Items) GetByCookieItem(ctx context.Context, cookieID, itemID string) (I
 	err := i.DB.QueryRowContext(ctx,
 		`SELECT i.id, i.cookie_id, i.item_id, COALESCE(i.item_title,''), COALESCE(i.item_description,''),
 		        COALESCE(i.item_category,''), COALESCE(i.item_price,''), COALESCE(i.item_detail,''),
-		        i.is_multi_spec, COALESCE(i.multi_quantity_delivery,0), COALESCE(s.ai_override,'inherit')
+		        i.is_multi_spec, COALESCE(i.multi_quantity_delivery,0), COALESCE(s.ai_override,'inherit'), COALESCE(i.status,'active')
 		 FROM item_info i LEFT JOIN item_ai_settings s ON s.cookie_id=i.cookie_id AND s.item_id=i.item_id
 		 WHERE i.cookie_id=? AND i.item_id=? AND i.deleted_at IS NULL`, cookieID, itemID).Scan(
 		&row.ID, &row.CookieID, &row.ItemID, &row.ItemTitle, &row.ItemDescription,
-		&row.ItemCategory, &row.ItemPrice, &row.ItemDetail, &isMulti, &multiQty, &row.AIOverride)
+		&row.ItemCategory, &row.ItemPrice, &row.ItemDetail, &isMulti, &multiQty, &row.AIOverride, &row.Status)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ItemInfoRow{}, ErrNotFound
@@ -70,7 +100,7 @@ func (i *Items) ListForUser(ctx context.Context, userID int64, cookieID string) 
 	rows, err := i.DB.QueryContext(ctx,
 		`SELECT i.id, i.cookie_id, i.item_id, COALESCE(i.item_title,''), COALESCE(i.item_description,''),
 		        COALESCE(i.item_category,''), COALESCE(i.item_price,''), COALESCE(i.item_detail,''),
-		        i.is_multi_spec, COALESCE(i.multi_quantity_delivery,0), COALESCE(s.ai_override,'inherit')
+		        i.is_multi_spec, COALESCE(i.multi_quantity_delivery,0), COALESCE(s.ai_override,'inherit'), COALESCE(i.status,'active')
 		 FROM item_info i JOIN cookies c ON c.id=i.cookie_id
 		 LEFT JOIN item_ai_settings s ON s.cookie_id=i.cookie_id AND s.item_id=i.item_id
 		 WHERE c.user_id=? AND (?='' OR i.cookie_id=?) AND i.deleted_at IS NULL
@@ -93,7 +123,7 @@ func scanItemInfoRows(rows *sql.Rows) ([]ItemInfoRow, error) {
 		var isMulti, multiQty int
 		if // err 用于本次流程后续判断的err
 		err := rows.Scan(&r.ID, &r.CookieID, &r.ItemID, &r.ItemTitle, &r.ItemDescription,
-			&r.ItemCategory, &r.ItemPrice, &r.ItemDetail, &isMulti, &multiQty, &r.AIOverride); err != nil {
+			&r.ItemCategory, &r.ItemPrice, &r.ItemDetail, &isMulti, &multiQty, &r.AIOverride, &r.Status); err != nil {
 			return nil, err
 		}
 		r.IsMultiSpec = isMulti != 0

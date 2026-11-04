@@ -616,6 +616,8 @@ type ItemInfoRow struct {
 	IsMultiSpec           bool
 	MultiQuantityDelivery bool
 	AIOverride            string
+	// Status 是平台生命周期状态：active=在售，down=平台已下架；独立于软删除审计。
+	Status string
 }
 
 // ItemSyncResult 是一次远端商品全集同步的结果。
