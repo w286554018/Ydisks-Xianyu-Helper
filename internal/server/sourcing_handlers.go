@@ -269,3 +269,54 @@ func writeSourcingError(w http.ResponseWriter, err error, fallback string) {
 		writeErr(w, http.StatusInternalServerError, fallback)
 	}
 }
+
+// sourcingHotKeywordMomentumResponse 是热词涨幅榜的响应 DTO。
+type sourcingHotKeywordMomentumResponse struct {
+	// WindowDays 是对比窗口天数。
+	WindowDays int `json:"window_days"`
+	// LatestDate 是最新快照归属日；无快照时为空。
+	LatestDate string `json:"latest_date"`
+	// Items 是按「新冒头优先、再按名次」排序的涨幅词条。
+	Items []sourcingKeywordMomentumDTO `json:"items"`
+}
+
+// sourcingKeywordMomentumDTO 是单个热词的涨幅词条。
+type sourcingKeywordMomentumDTO struct {
+	// Keyword 是热词文本。
+	Keyword string `json:"keyword"`
+	// Status 是涨幅状态：new/rising/steady/falling。
+	Status string `json:"status"`
+	// Position 是该词在最新快照中的名次；已跌出时为 0。
+	Position int `json:"position"`
+	// PreviousPosition 是该词在前一日快照中的名次；此前不在榜时为 0。
+	PreviousPosition int `json:"previous_position"`
+	// DaysOnList 是该词在窗口内出现的总天数。
+	DaysOnList int `json:"days_on_list"`
+}
+
+// sourcingHotKeywordMomentum 返回热词涨幅榜。
+func (s *Server) sourcingHotKeywordMomentum(w http.ResponseWriter, r *http.Request) {
+	// sourcing 是已装配的选品参考用例。
+	sourcing, ok := s.requireSourcing(w)
+	if !ok {
+		return
+	}
+	// summary 是涨幅榜计算结果。
+	summary, err := sourcing.Momentum(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "计算热词涨幅失败")
+		return
+	}
+	// items 是响应词条；nil 转为空数组，避免前端拿到 null。
+	items := make([]sourcingKeywordMomentumDTO, 0, len(summary.Items))
+	// entry 是当前遍历的涨幅词条。
+	for _, entry := range summary.Items {
+		items = append(items, sourcingKeywordMomentumDTO{
+			Keyword: entry.Keyword, Status: entry.Status, Position: entry.Position,
+			PreviousPosition: entry.PreviousPosition, DaysOnList: entry.DaysOnList,
+		})
+	}
+	writeJSON(w, http.StatusOK, sourcingHotKeywordMomentumResponse{
+		WindowDays: summary.WindowDays, LatestDate: summary.LatestDate, Items: items,
+	})
+}

@@ -29,6 +29,7 @@ import (
 	libraryapp "xianyu-go/internal/application/library"
 	lifecycleapp "xianyu-go/internal/application/lifecycle"
 	logsapp "xianyu-go/internal/application/logs"
+	marketintelapp "xianyu-go/internal/application/marketintel"
 	notificationsapp "xianyu-go/internal/application/notifications"
 	orderapp "xianyu-go/internal/application/orders"
 	settingsapp "xianyu-go/internal/application/settings"
@@ -120,6 +121,8 @@ type Services struct {
 	analytics *analyticsapp.Service
 	// sourcing 是选品参考应用服务；浏览器与 AI 能力按需降级，允许为 nil 表示功能未启用。
 	sourcing *sourcingapp.Service
+	// marketIntel 是市场情报应用服务；nil 表示功能未启用。
+	marketIntel *marketintelapp.Service
 	// automationIssues 是自动化异常查询与人工处理应用服务。
 	automationIssues *automationapp.IssueService
 	// automationAudit 是规则日志（自动化行为审计）分页查询应用服务。
@@ -203,6 +206,8 @@ type Dependencies struct {
 	LifecycleContext func() context.Context
 	// Sourcing 是组合根预先装配的选品参考应用服务；为 nil 时对应 HTTP 端点返回功能未启用。
 	Sourcing *sourcingapp.Service
+	// MarketIntel 是组合根预先装配的市场情报应用服务；为 nil 时对应 HTTP 端点返回功能未启用。
+	MarketIntel *marketintelapp.Service
 }
 
 // settingsRuntimeTransport 将账号运行时控制投影给设置用例，并确保启用或 Cookie 重启永远使用进程生命周期 Context。
@@ -354,7 +359,9 @@ type TransportPorts struct {
 	NotificationChannels   *notificationsapp.ChannelService
 	Analytics              *analyticsapp.Service
 	// Sourcing 是选品参考应用服务；nil 表示功能未启用。
-	Sourcing          *sourcingapp.Service
+	Sourcing *sourcingapp.Service
+	// MarketIntel 是市场情报应用服务；nil 表示功能未启用。
+	MarketIntel       *marketintelapp.Service
 	AutomationIssues  *automationapp.IssueService
 	AutomationAudit   *automationapp.AuditService
 	AutomationRules   *automationapp.RuleService
@@ -390,7 +397,7 @@ func (services *Services) TransportPorts() TransportPorts {
 		AccountLongLogin: services.accountLongLogin, AccountSettings: services.accountSettings, AccountRuntime: services.accountRuntime,
 		AccountSummaries: services.accountSummaries, AccountTasks: services.accountTasks, Chat: services.chat,
 		UncertainNotifications: services.uncertainNotifications, NotificationChannels: services.notificationChannels,
-		Analytics: services.analytics, Sourcing: services.sourcing, AutomationIssues: services.automationIssues, AutomationAudit: services.automationAudit, AutomationRules: services.automationRules, DeliveryTemplates: services.deliveryTemplates,
+		Analytics: services.analytics, Sourcing: services.sourcing, MarketIntel: services.marketIntel, AutomationIssues: services.automationIssues, AutomationAudit: services.automationAudit, AutomationRules: services.automationRules, DeliveryTemplates: services.deliveryTemplates,
 		Cards: services.cards, APICardTester: services.apiCardTester, PublishAutomationRules: services.publishAutomationRules, DefaultReplies: services.defaultReplies, ItemGreetings: services.itemGreetings, Library: services.library,
 		Keywords: services.keywords, Settings: services.settings, Admin: services.admin, RuntimeLogs: services.runtimeLogs,
 	}
@@ -612,7 +619,7 @@ func New(dependencies Dependencies) (*Services, error) {
 		chat:                   buildChatApplication(dependencies),
 		uncertainNotifications: dependencies.TransportApplications.UncertainNotifications,
 		notificationChannels:   dependencies.TransportApplications.NotificationChannels,
-		analytics:              dependencies.TransportApplications.Analytics, sourcing: dependencies.Sourcing,
+		analytics:              dependencies.TransportApplications.Analytics, sourcing: dependencies.Sourcing, marketIntel: dependencies.TransportApplications.MarketIntel,
 		automationRules:        dependencies.TransportApplications.AutomationRules,
 		deliveryTemplates:      dependencies.TransportApplications.DeliveryTemplates,
 		cards:                  dependencies.TransportApplications.Cards,

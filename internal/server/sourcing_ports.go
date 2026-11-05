@@ -18,4 +18,6 @@ type SourcingPort interface {
 	ShopRanking(context.Context, int64, string) (sourcingapp.ShopRankingView, error)
 	// GenerateCopywriting 生成指定模式的 AI 文案。
 	GenerateCopywriting(context.Context, int64, sourcingapp.CopywritingRequest) (sourcingapp.Copywriting, error)
+	// Momentum 返回热词涨幅榜（窗口内名次变化对比）。
+	Momentum(context.Context) (sourcingapp.MomentumSummary, error)
 }

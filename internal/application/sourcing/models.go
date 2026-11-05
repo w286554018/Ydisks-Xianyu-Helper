@@ -173,6 +173,8 @@ type Repository interface {
 	GetSnapshot(ctx context.Context, kind, date string) (Snapshot, error)
 	// DeleteSnapshotsBefore 删除早于指定日期的快照。
 	DeleteSnapshotsBefore(ctx context.Context, beforeDate string) error
+	// ListRecentSnapshots 按日期倒序返回某类别的最近快照；用于热词涨幅的时间序列对比。
+	ListRecentSnapshots(ctx context.Context, kind string, limit int) ([]Snapshot, error)
 	// ListOrderRows 返回指定用户在时间窗口内的订单原始行。
 	ListOrderRows(ctx context.Context, userID int64, since time.Time) ([]OrderRow, error)
 }

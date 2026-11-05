@@ -169,6 +169,12 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 	if sourcingErr != nil {
 		return Runtime{}, sourcingErr
 	}
+	// marketIntelService 是市场情报应用服务；浏览器禁用时仍可装配（扫描会明确降级）。
+	marketIntelService := buildMarketIntel(infrastructure, browserManager)
+	// marketIntelSchedulerErr 是市场情报每日调度组件登记失败原因。
+	if marketIntelSchedulerErr := buildMarketIntelScheduler(infrastructure, lifecycleCoordinator, marketIntelService); marketIntelSchedulerErr != nil {
+		return Runtime{}, marketIntelSchedulerErr
+	}
 	// updateRunningCookie 将平台返回的新 Cookie 同步到运行时；值不记录到日志。
 	updateRunningCookie := func(ctx context.Context, accountID, value string) {
 		if services == nil {
@@ -191,7 +197,7 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 		Notifier: runtimeBundle.Notifier, Chat: runtimeBundle.Chat, ChatApplication: runtimeBundle.ChatApplication, Logger: infrastructure.Logger,
 		MTopClient: platformDependencies.MTOPClient, LongLoginClient: platformDependencies.LongLoginClient, QRLogin: platformDependencies.QRLoginService(),
 		UpdateRunningCookie: updateRunningCookie, SessionRecovery: sessionRecovery, LifecycleContext: lifecycleCoordinator.Context,
-		Sourcing: sourcingService,
+		Sourcing: sourcingService, MarketIntel: marketIntelService,
 	})
 	if buildErr != nil {
 		return Runtime{}, fmt.Errorf("构造应用服务集合失败: %w", buildErr)

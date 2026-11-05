@@ -3,6 +3,7 @@ package adapter
 import (
 	"fmt"
 	"log/slog"
+	marketintelapp "xianyu-go/internal/application/marketintel"
 
 	adminapp "xianyu-go/internal/application/admin"
 	analyticsapp "xianyu-go/internal/application/analytics"
@@ -54,6 +55,8 @@ type TransportApplicationServices struct {
 	NotificationChannels *notificationsapp.ChannelService
 	// Analytics 提供订单统计分析用例。
 	Analytics *analyticsapp.Service
+	// MarketIntel 提供市场情报用例；nil 表示功能未启用。
+	MarketIntel *marketintelapp.Service
 	// AutomationIssues 提供自动化异常查询和人工处理用例。
 	AutomationIssues *automationapp.IssueService
 	// AutomationAudit 提供规则日志（自动化行为审计）分页查询用例。

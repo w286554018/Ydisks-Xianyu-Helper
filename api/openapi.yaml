@@ -8712,6 +8712,339 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/sourcing/hot-keywords/momentum":
+    get:
+      operationId: getApiV1SourcingHotKeywordsMomentum
+      summary: 读取热词涨幅榜（窗口内名次变化）
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingHotKeywordMomentumResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/keywords":
+    get:
+      operationId: getApiV1MarketIntelKeywords
+      summary: 读取全部关注词
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelKeywordListResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: postApiV1MarketIntelKeywords
+      summary: 新增关注词
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketIntelKeywordRequest'
+      responses:
+        '201':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelKeyword'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/keywords/{id}":
+    put:
+      operationId: putApiV1MarketIntelKeywordsId
+      summary: 更新关注词
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketIntelKeywordRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelKeyword'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      operationId: deleteApiV1MarketIntelKeywordsId
+      summary: 删除关注词
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelDeleteResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/keywords/{id}/trend":
+    get:
+      operationId: getApiV1MarketIntelKeywordsIdTrend
+      summary: 读取关注词需求趋势
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelTrendResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/overview":
+    get:
+      operationId: getApiV1MarketIntelOverview
+      summary: 读取市场情报概览（热词涨幅与各词最新聚合）
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelOverviewResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/sellers":
+    get:
+      operationId: getApiV1MarketIntelSellers
+      summary: 读取竞品卖家榜
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelSellerBoardResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/scan":
+    post:
+      operationId: postApiV1MarketIntelScan
+      summary: 手动触发市场扫描（幂等）
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelScanResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/sourcing/hot-keywords/refresh":
     post:
       operationId: postApiV1SourcingHotKeywordsRefresh
@@ -11070,6 +11403,121 @@ components:
           items: {type: string}
         status: {type: string}
         error_message: {type: string}
+    SourcingHotKeywordMomentumResponse:
+      type: object
+      required: [window_days, latest_date, items]
+      properties:
+        window_days: {type: integer}
+        latest_date: {type: string}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourcingKeywordMomentum'
+    SourcingKeywordMomentum:
+      type: object
+      required: [keyword, status, position, previous_position, days_on_list]
+      properties:
+        keyword: {type: string}
+        status:
+          type: string
+          enum: [new, rising, steady, falling]
+        position: {type: integer}
+        previous_position: {type: integer}
+        days_on_list: {type: integer}
+    MarketIntelKeyword:
+      type: object
+      required: [id, keyword, enabled, sort_order]
+      properties:
+        id: {type: integer}
+        keyword: {type: string}
+        enabled: {type: boolean}
+        sort_order: {type: integer}
+    MarketIntelKeywordRequest:
+      type: object
+      required: [keyword]
+      properties:
+        keyword: {type: string}
+        enabled: {type: boolean}
+    MarketIntelKeywordListResponse:
+      type: object
+      required: [items, max_enabled]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketIntelKeyword'
+        max_enabled: {type: integer}
+    MarketIntelDeleteResponse:
+      type: object
+      required: [success]
+      properties:
+        success: {type: boolean}
+    MarketIntelScanResponse:
+      type: object
+      required: [date, scanned, skipped, verdict_failed]
+      properties:
+        date: {type: string}
+        scanned: {type: integer}
+        skipped: {type: integer}
+        verdict_failed: {type: integer}
+        stopped_reason: {type: string}
+    MarketIntelAggregate:
+      type: object
+      required: [keyword, date, total_count, ai_count, total_want, verdict_status]
+      properties:
+        keyword: {type: string}
+        date: {type: string}
+        total_count: {type: integer}
+        ai_count: {type: integer}
+        total_want: {type: integer}
+        verdict_status:
+          type: string
+          enum: [pending, done]
+    MarketIntelOverviewResponse:
+      type: object
+      required: [momentum, keywords]
+      properties:
+        momentum:
+          $ref: '#/components/schemas/SourcingHotKeywordMomentumResponse'
+        keywords:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketIntelAggregate'
+    MarketIntelTrendPoint:
+      type: object
+      required: [date, total_want, ai_count, total_count]
+      properties:
+        date: {type: string}
+        total_want: {type: integer}
+        ai_count: {type: integer}
+        total_count: {type: integer}
+    MarketIntelTrendResponse:
+      type: object
+      required: [keyword_id, keyword, days, points]
+      properties:
+        keyword_id: {type: integer}
+        keyword: {type: string}
+        days: {type: integer}
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketIntelTrendPoint'
+    MarketIntelSellerStat:
+      type: object
+      required: [nickname, appearances]
+      properties:
+        nickname: {type: string}
+        appearances: {type: integer}
+        avg_price: {type: string}
+    MarketIntelSellerBoardResponse:
+      type: object
+      required: [days, sellers]
+      properties:
+        days: {type: integer}
+        sellers:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketIntelSellerStat'
     SourcingSearchRequest:
       type: object
       required: [cookie_id, keyword]

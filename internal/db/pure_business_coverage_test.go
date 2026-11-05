@@ -42,7 +42,7 @@ func TestPureBusinessHelpers(t *testing.T) {
 	}
 	// sensitiveKeys 保存业务允许进入敏感设置审计流程的完整键名集合。
 	sensitiveKeys := SensitiveSettingKeys()
-	if len(sensitiveKeys) != 4 || !IsSensitiveSettingKey(" AI_API_KEY ") || IsSensitiveSettingKey("normal_key") {
+	if len(sensitiveKeys) != 5 || !IsSensitiveSettingKey(" AI_API_KEY ") || !IsSensitiveSettingKey("market_intel_api_key") || IsSensitiveSettingKey("normal_key") {
 		t.Fatalf("sensitive keys=%v", sensitiveKeys)
 	}
 	// statusCasesForBatch 保存批次成功/失败计数与最终状态的映射。

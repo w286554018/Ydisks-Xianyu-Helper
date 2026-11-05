@@ -3,6 +3,8 @@ package sourcing
 import (
 	"context"
 	"errors"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -39,6 +41,25 @@ func (f *fakeRepository) GetSnapshot(_ context.Context, kind, date string) (Snap
 func (f *fakeRepository) DeleteSnapshotsBefore(_ context.Context, beforeDate string) error {
 	f.deletedBefore = beforeDate
 	return nil
+}
+
+// ListRecentSnapshots 返回内存中某类别按日期倒序的最近快照。
+func (f *fakeRepository) ListRecentSnapshots(_ context.Context, kind string, limit int) ([]Snapshot, error) {
+	// matched 汇总该类别的全部快照。
+	matched := make([]Snapshot, 0)
+	// key 是当前遍历的快照键。
+	for key, snapshot := range f.snapshots {
+		// kindPart 是快照键中的类别部分。
+		kindPart := key[:strings.Index(key, "|")]
+		if kindPart == kind {
+			matched = append(matched, snapshot)
+		}
+	}
+	sort.Slice(matched /* 日期倒序排列。 */, func(i, j int) bool { return matched[i].Date > matched[j].Date })
+	if limit > 0 && len(matched) > limit {
+		matched = matched[:limit]
+	}
+	return matched, nil
 }
 
 // ListOrderRows 返回预置订单行并计数。

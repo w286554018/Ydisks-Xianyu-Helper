@@ -70,6 +70,25 @@ func (r *SourcingRepository) DeleteSnapshotsBefore(ctx context.Context, beforeDa
 	return err
 }
 
+// ListRecentSnapshots 按日期倒序返回某类别的最近快照，并转换为应用层视图。
+func (r *SourcingRepository) ListRecentSnapshots(ctx context.Context, kind string, limit int) ([]sourcingapp.Snapshot, error) {
+	// rows 是数据库快照行。
+	rows, err := r.store.Sourcing.ListRecentSnapshots(ctx, kind, limit)
+	if err != nil {
+		return nil, err
+	}
+	// out 是转换后的应用层快照集合。
+	out := make([]sourcingapp.Snapshot, 0, len(rows))
+	// row 是当前遍历的数据库快照行。
+	for _, row := range rows {
+		out = append(out, sourcingapp.Snapshot{
+			Kind: row.Kind, Date: row.SnapshotDate, PayloadJSON: row.PayloadJSON,
+			Status: row.Status, ErrorMessage: row.ErrorMessage,
+		})
+	}
+	return out, nil
+}
+
 // ListOrderRows 读取用户在时间窗口内的订单原始行。
 func (r *SourcingRepository) ListOrderRows(ctx context.Context, userID int64, since time.Time) ([]sourcingapp.OrderRow, error) {
 	// rows、err 是数据库读取结果。

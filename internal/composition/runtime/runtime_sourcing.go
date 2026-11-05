@@ -6,6 +6,7 @@ import (
 
 	"xianyu-go/internal/adapter"
 	"xianyu-go/internal/application/lifecycle"
+	marketintelapp "xianyu-go/internal/application/marketintel"
 	sourcingapp "xianyu-go/internal/application/sourcing"
 	"xianyu-go/internal/browser"
 )
@@ -36,4 +37,21 @@ func buildSourcing(infrastructure RuntimeInfrastructure, browserManager *browser
 		return nil, fmt.Errorf("登记选品参考调度组件失败: %w", addErr)
 	}
 	return service, nil
+}
+
+// buildMarketIntelScheduler 装配市场情报每日扫描调度组件；当天已成功扫描时幂等跳过。
+func buildMarketIntelScheduler(infrastructure RuntimeInfrastructure, coordinator *lifecycle.Coordinator, service *marketintelapp.Service) error {
+	if service == nil {
+		return nil
+	}
+	// scheduler 是市场情报每日调度器。
+	scheduler := marketintelapp.NewScheduler(service, infrastructure.Logger)
+	// addErr 是调度组件登记失败原因。
+	if addErr := coordinator.Add(lifecycle.NamedComponent{Name: "market-intel-scheduler", Component: lifecycle.FuncComponent{
+		StartFunc: func(ctx context.Context) error { scheduler.Start(ctx); return nil },
+		CloseFunc: func(context.Context) error { scheduler.Stop(); return nil },
+	}}); addErr != nil {
+		return fmt.Errorf("登记市场情报调度组件失败: %w", addErr)
+	}
+	return nil
 }

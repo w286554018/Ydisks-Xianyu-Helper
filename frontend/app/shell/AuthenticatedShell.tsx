@@ -80,6 +80,8 @@ const Notifications = lazy(/* Notifications 页面按路由激活时加载。 */
 const Chat = lazy(/* Chat 页面按路由激活时加载。 */ () => import('../features/chat/pages/Chat'));
 // SourcingInsights 是按需加载的选品参考页面（热词、查货、畅销榜与 AI 文案）。
 const SourcingInsights = lazy(/* SourcingInsights 页面按路由激活时加载。 */ () => import('../features/sourcing/pages/SourcingInsights'));
+// MarketIntelSection 是按需加载的市场情报区块（关注词、热词涨幅、趋势与竞品卖家）。
+const MarketIntelSection = lazy(/* MarketIntelSection 区块按路由激活时加载。 */ () => import('../features/marketintel/components/MarketIntelSection'));
 // RuntimeLogs 是按需加载的运行日志页面，仅在管理员访问时加载，避免普通用户下载诊断代码。
 const RuntimeLogs = lazy(/* RuntimeLogs 页面按路由激活时加载。 */ () => import('../features/logs/pages/RuntimeLogs'));
 
@@ -141,7 +143,13 @@ export const AppContent: React.FC<AppContentProps> = ({
       />;
       case 'delivery-templates': return <DeliveryTemplates />;
       case 'library': return <ResourceLibrary onBatchStarted={onNavigateToItems} locationPicker={LibraryLocationPicker} />;
-      case 'sourcing': return <SourcingInsights />;
+      case 'sourcing':
+        return (
+          <div className="space-y-6">
+            <SourcingInsights />
+            <MarketIntelSection />
+          </div>
+        );
       case 'notifications': return <Notifications isAdmin={isAdmin} />;
       case 'logs': return isAdmin ? <RuntimeLogs /> : <Dashboard />;
       case 'settings': return isAdmin ? <Settings /> : <Dashboard />;

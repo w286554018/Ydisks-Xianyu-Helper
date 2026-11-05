@@ -54,6 +54,8 @@ type Store struct {
 	Analytics     *AnalyticsQueries
 	// Sourcing 保存选品参考的热词与本店畅销榜快照，不保存任何平台凭证。
 	Sourcing *Sourcing
+	// MarketIntel 保存市场情报的关注词、商品快照、AI 判定与每日聚合。
+	MarketIntel *MarketIntel
 
 	credentialMu    sync.Mutex
 	credentialLocks map[string]*credentialLockEntry
@@ -121,6 +123,7 @@ func NewStore(db *sql.DB, dialect Dialect) *Store {
 		Admin:             &AdminQueries{DB: db},
 		Analytics:         &AnalyticsQueries{DB: db},
 		Sourcing:          &Sourcing{DB: db, Dialect: dialect},
+		MarketIntel:       &MarketIntel{DB: db, Dialect: dialect},
 		credentialLocks:   make(map[string]*credentialLockEntry),
 	}
 }
