@@ -313,6 +313,8 @@ type SellerStat struct {
 	Appearances int `json:"appearances"`
 	// AvgPrice 是出现商品的平均价格文本。
 	AvgPrice string `json:"avg_price"`
+	// SampleURL 是该卖家最近一次出现商品的详情页地址；用户可从商品页进入卖家主页。
+	SampleURL string `json:"sample_url,omitempty"`
 }
 
 // buildCategoryCounts 从判定结果统计类目分布。

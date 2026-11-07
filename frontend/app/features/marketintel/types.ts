@@ -103,6 +103,8 @@ export interface SellerStat {
   appearances: number;
   /** avgPrice 是平均价格文本。 */
   avgPrice: string;
+  /** sampleUrl 是该卖家最近出现商品的详情页地址；从商品页可进入卖家主页。 */
+  sampleUrl?: string;
 }
 
 /** SellerBoardData 是卖家榜视图。 */

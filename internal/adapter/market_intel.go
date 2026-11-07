@@ -199,6 +199,8 @@ func (a *MarketIntelScanStore) refreshAggregate(ctx context.Context, keyword, sn
 	sellerCounts := make(map[string]int)
 	// sellerPriceSum 是卖家价格合计（解析失败的行不计入）。
 	sellerPriceSum := make(map[string]float64)
+	// sellerSampleURLs 记录每个卖家最近一次出现的商品详情链接。
+	sellerSampleURLs := make(map[string]string)
 	// snapshot 是当前快照行。
 	for _, snapshot := range snapshots {
 		totalWant += snapshot.WantCount
@@ -222,6 +224,10 @@ func (a *MarketIntelScanStore) refreshAggregate(ctx context.Context, keyword, sn
 			if _, err := fmt.Sscanf(strings.ReplaceAll(strings.ReplaceAll(snapshot.Price, "¥", ""), ",", ""), "%f", &price); err == nil {
 				sellerPriceSum[snapshot.SellerNickname] += price
 			}
+			// 商品链接作为卖家示例入口；raw_json 存的是详情页地址。
+			if strings.TrimSpace(snapshot.RawJSON) != "" {
+				sellerSampleURLs[snapshot.SellerNickname] = snapshot.RawJSON
+			}
 		}
 	}
 	// verdictStatus 依据是否有判定结果决定。
@@ -232,7 +238,7 @@ func (a *MarketIntelScanStore) refreshAggregate(ctx context.Context, keyword, sn
 	// categoryJSON 与 topSellersJSON 是聚合的嵌套 JSON。
 	categoryJSON := marshalMarketIntelJSON(categoryCounts)
 	// topSellers 是按出现次数取前 5 的卖家。
-	topSellers := buildTopSellers(sellerCounts, sellerPriceSum, 5)
+	topSellers := buildTopSellers(sellerCounts, sellerPriceSum, sellerSampleURLs, 5)
 	// topSellersJSON 是头部卖家统计的 JSON 文本。
 	topSellersJSON := marshalMarketIntelJSON(topSellers)
 	return a.store.MarketIntel.SaveAggregate(ctx, db.MarketIntelAggregateRow{
@@ -242,8 +248,8 @@ func (a *MarketIntelScanStore) refreshAggregate(ctx context.Context, keyword, sn
 	})
 }
 
-// buildTopSellers 按出现次数取前 N 的卖家统计。
-func buildTopSellers(counts map[string]int, priceSum map[string]float64, limit int) []marketintel.SellerStat {
+// buildTopSellers 按出现次数取前 N 的卖家统计；sampleURLs 提供每个卖家的示例商品链接。
+func buildTopSellers(counts map[string]int, priceSum map[string]float64, sampleURLs map[string]string, limit int) []marketintel.SellerStat {
 	// out 是卖家统计集合。
 	out := make([]marketintel.SellerStat, 0, len(counts))
 	// nickname、count 遍历计数表。
@@ -253,7 +259,7 @@ func buildTopSellers(counts map[string]int, priceSum map[string]float64, limit i
 		if priceSum[nickname] > 0 {
 			avgPrice = fmt.Sprintf("%.2f", priceSum[nickname]/float64(count))
 		}
-		out = append(out, marketintel.SellerStat{Nickname: nickname, Appearances: count, AvgPrice: avgPrice})
+		out = append(out, marketintel.SellerStat{Nickname: nickname, Appearances: count, AvgPrice: avgPrice, SampleURL: sampleURLs[nickname]})
 	}
 	// 简单选择排序取前 N；N 很小（5），无需引入排序库。
 	for i := 0; i < len(out) && i < limit; i++ {
@@ -479,6 +485,8 @@ func (a *MarketIntelScanStore) ListSellerStats(ctx context.Context, days int) ([
 	counts := make(map[string]int)
 	// priceSum 是卖家价格合计。
 	priceSum := make(map[string]float64)
+	// sampleURLs 记录每个卖家的示例商品链接。
+	sampleURLs := make(map[string]string)
 	// snapshot 是当前快照行。
 	for _, snapshot := range snapshots {
 		// 只统计已判定为 AI 相关的商品；无判定数据时统计全部（判定未启用阶段）。
@@ -498,9 +506,13 @@ func (a *MarketIntelScanStore) ListSellerStats(ctx context.Context, days int) ([
 		if _, scanErr := fmt.Sscanf(strings.ReplaceAll(strings.ReplaceAll(snapshot.Price, "¥", ""), ",", ""), "%f", &price); scanErr == nil {
 			priceSum[nickname] += price
 		}
+		// 商品链接作为卖家示例入口。
+		if strings.TrimSpace(snapshot.RawJSON) != "" {
+			sampleURLs[nickname] = snapshot.RawJSON
+		}
 	}
 	// top 是按出现次数取前 20 的卖家统计。
-	top := buildTopSellers(counts, priceSum, 20)
+	top := buildTopSellers(counts, priceSum, sampleURLs, 20)
 	return top, nil
 }
 

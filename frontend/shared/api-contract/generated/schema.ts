@@ -4292,6 +4292,7 @@ export interface components {
             nickname: string;
             appearances: number;
             avg_price?: string;
+            sample_url?: string;
         };
         MarketIntelSellerBoardResponse: {
             days: number;

@@ -96,6 +96,6 @@ export const fetchSellerBoard = async (days: number, options?: RequestControlOpt
   const data = await runContractRequest(/* signal 控制卖家榜读取的取消和超时。 */ signal => contractClient.GET('/api/v1/market-intel/sellers', { params: { query: { days } }, signal }), options);
   return {
     days: data.days,
-    sellers: (data.sellers ?? []).map(/* sellerStat 归一卖家统计。 */ seller => ({ nickname: seller.nickname, appearances: seller.appearances, avgPrice: seller.avg_price ?? '' })),
+    sellers: (data.sellers ?? []).map(/* sellerStat 归一卖家统计。 */ seller => ({ nickname: seller.nickname, appearances: seller.appearances, avgPrice: seller.avg_price ?? '', sampleUrl: seller.sample_url })),
   };
 };

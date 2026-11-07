@@ -11510,6 +11510,7 @@ components:
         nickname: {type: string}
         appearances: {type: integer}
         avg_price: {type: string}
+        sample_url: {type: string}
     MarketIntelSellerBoardResponse:
       type: object
       required: [days, sellers]

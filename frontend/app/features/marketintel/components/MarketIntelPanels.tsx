@@ -165,10 +165,14 @@ export const SellerBoardPanel: React.FC<SellerBoardPanelProps> = ({ board, loadi
       <div className="py-6 text-center text-xs text-gray-400">{loading ? '正在加载卖家榜...' : '暂无卖家数据，等待每日扫描积累'}</div>
     ) : (
       <div className="max-h-[320px] space-y-1.5 overflow-y-auto">
-        {board.sellers.map(/* sellerRow 渲染单个卖家行。 */ (seller, index) => (
+        {board.sellers.map(/* sellerRow 渲染单个卖家行；点击昵称打开其商品页。 */ (seller, index) => (
           <div key={seller.nickname} className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2">
             <span className="w-6 shrink-0 text-center font-mono text-xs font-bold text-gray-400">{index + 1}</span>
-            <span className="min-w-0 flex-1 truncate text-xs font-bold text-gray-800">{seller.nickname}</span>
+            {seller.sampleUrl ? (
+              <a href={seller.sampleUrl} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-xs font-bold text-brand hover:underline" title={`打开 ${seller.nickname} 的商品页（可从商品页进入卖家主页）`}>{seller.nickname}</a>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-xs font-bold text-gray-800">{seller.nickname}</span>
+            )}
             <span className="shrink-0 text-[10px] text-gray-500">{seller.appearances} 次</span>
             {seller.avgPrice && <span className="shrink-0 text-[10px] text-gray-400">均价 ¥{seller.avgPrice}</span>}
           </div>
