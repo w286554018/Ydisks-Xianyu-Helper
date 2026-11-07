@@ -100,100 +100,104 @@ export const useMarketIntel = (): MarketIntelState => {
   const [scanning, setScanning] = useState(false);
   // scanMessage 是最近一次扫描的结果说明。
   const [scanMessage, setScanMessage] = useState('');
-  // requestGeneration 丢弃晚到响应。
+  // requestGeneration 丢弃晚到响应；每个动作独立递增，互不取消。
   const requestGeneration = useRef(0);
-  // controller 保存当前请求取消器。
-  const controller = useRef<AbortController | null>(null);
+  // controllers 保存全部在途请求的取消器；组件卸载时统一中止。
+  const controllers = useRef<Set<AbortController>>(new Set());
 
-  // 组件卸载时中止未完成请求。
+  // 组件卸载时中止全部未完成请求。
   useEffect(
     () => (
-      /* 卸载清理回调中止网络请求。 */
+      /* 卸载清理回调中止所有在途网络请求。 */
       () => {
-        controller.current?.abort();
-        requestGeneration.current += 1;
+        controllers.current.forEach(/* inFlightController 中止单个在途请求。 */ controller => controller.abort());
+        controllers.current.clear();
       }
     ),
     [],
   );
 
-  // beginRequest 取消旧请求并返回新代次。
-  const beginRequest = useCallback(/* beginRequest 的回调负责取消旧动作并推进代次。 */ () => {
-    controller.current?.abort();
-    // next 是新的取消器。
+  // beginRequest 创建动作独立的取消器并返回代次；并行请求互不取消。
+  const beginRequest = useCallback(/* beginRequest 的回调创建独立取消器并推进代次。 */ () => {
+    // next 是本次动作独享的取消器。
     const next = new AbortController();
-    controller.current = next;
+    controllers.current.add(next);
     requestGeneration.current += 1;
-    return requestGeneration.current;
+    // done 在请求结束时把取消器移出在途集合。
+    const done = () => controllers.current.delete(next);
+    return { generation: requestGeneration.current, signal: next.signal, done };
   }, []);
 
   // loadKeywords 刷新词表。
   const loadKeywords = useCallback(/* loadKeywordsAction 刷新词表。 */ async () => {
-    // generation 是本次读取代次。
-    const generation = beginRequest();
+    // request 是本次读取的独立取消器与代次。
+    const request = beginRequest();
     setKeywordsLoading(true);
     setKeywordsError('');
     try {
       // result 是词表读取结果。
-      const result = await fetchKeywords({ signal: controller.current?.signal });
-      if (generation !== requestGeneration.current) return;
+      const result = await fetchKeywords({ signal: request.signal });
+      if (request.generation !== requestGeneration.current) return;
       setKeywords(result);
     } catch (error /* 词表读取错误 */) {
-      if (generation !== requestGeneration.current) return;
+      if (request.generation !== requestGeneration.current) return;
       setKeywordsError(error instanceof Error ? error.message : '读取关注词失败');
     } finally {
-      if (generation === requestGeneration.current) setKeywordsLoading(false);
+      request.done();
+      if (request.generation === requestGeneration.current) setKeywordsLoading(false);
     }
   }, [beginRequest]);
 
   // loadMomentum 刷新热词涨幅。
   const loadMomentum = useCallback(/* loadMomentumAction 刷新热词涨幅。 */ async () => {
-    // generation 是本次读取代次。
-    const generation = beginRequest();
+    // request 是本次读取的独立取消器与代次。
+    const request = beginRequest();
     setMomentumLoading(true);
     setMomentumError('');
     try {
       // result 是涨幅读取结果。
-      const result = await fetchMomentum({ signal: controller.current?.signal });
-      if (generation !== requestGeneration.current) return;
+      const result = await fetchMomentum({ signal: request.signal });
+      if (request.generation !== requestGeneration.current) return;
       setMomentum(result);
     } catch (error /* 涨幅读取错误 */) {
-      if (generation !== requestGeneration.current) return;
+      if (request.generation !== requestGeneration.current) return;
       setMomentumError(error instanceof Error ? error.message : '读取热词涨幅失败');
     } finally {
-      if (generation === requestGeneration.current) setMomentumLoading(false);
+      request.done();
+      if (request.generation === requestGeneration.current) setMomentumLoading(false);
     }
   }, [beginRequest]);
 
   // refreshOverview 刷新概览（涨幅 + 聚合 + 卖家榜）。
   const refreshOverview = useCallback(/* refreshOverviewAction 刷新概览。 */ async () => {
-    // generation 是本次读取代次。
-    const generation = beginRequest();
+    // request 是本次读取的独立取消器与代次。
+    const request = beginRequest();
     setAggregatesLoading(true);
     setBoardLoading(true);
     setBoardError('');
     try {
       // overview 是概览读取结果。
-      const overview = await fetchOverview({ signal: controller.current?.signal });
-      if (generation !== requestGeneration.current) return;
+      const overview = await fetchOverview({ signal: request.signal });
+      if (request.generation !== requestGeneration.current) return;
       setMomentum(overview.momentum);
       setAggregates(overview.keywords);
     } catch (error /* 概览读取错误 */) {
-      if (generation !== requestGeneration.current) return;
+      if (request.generation !== requestGeneration.current) return;
       console.error('读取市场概览失败:', error);
     } finally {
-      if (generation === requestGeneration.current) setAggregatesLoading(false);
+      if (request.generation === requestGeneration.current) setAggregatesLoading(false);
     }
     try {
       // boardData 是卖家榜读取结果。
-      const boardData = await fetchSellerBoard(30, { signal: controller.current?.signal });
-      if (generation !== requestGeneration.current) return;
+      const boardData = await fetchSellerBoard(30, { signal: request.signal });
+      if (request.generation !== requestGeneration.current) return;
       setBoard(boardData);
     } catch (error /* 卖家榜读取错误 */) {
-      if (generation !== requestGeneration.current) return;
+      if (request.generation !== requestGeneration.current) return;
       setBoardError(error instanceof Error ? error.message : '读取卖家榜失败');
     } finally {
-      if (generation === requestGeneration.current) setBoardLoading(false);
+      request.done();
+      if (request.generation === requestGeneration.current) setBoardLoading(false);
     }
   }, [beginRequest]);
 
@@ -273,21 +277,22 @@ export const useMarketIntel = (): MarketIntelState => {
 
   // selectKeyword 查看单词趋势。
   const selectKeyword = useCallback(/* selectKeywordAction 加载单词趋势。 */ async (item: WatchedKeyword) => {
-    // generation 是本次读取代次。
-    const generation = beginRequest();
+    // request 是本次读取的独立取消器与代次。
+    const request = beginRequest();
     setTrendLoading(true);
     setTrendError('');
     setTrend(null);
     try {
       // result 是趋势读取结果。
-      const result = await fetchKeywordTrend(item.id, 30, { signal: controller.current?.signal });
-      if (generation !== requestGeneration.current) return;
+      const result = await fetchKeywordTrend(item.id, 30, { signal: request.signal });
+      if (request.generation !== requestGeneration.current) return;
       setTrend(result);
     } catch (error /* 趋势读取错误 */) {
-      if (generation !== requestGeneration.current) return;
+      if (request.generation !== requestGeneration.current) return;
       setTrendError(error instanceof Error ? error.message : '读取趋势失败');
     } finally {
-      if (generation === requestGeneration.current) setTrendLoading(false);
+      request.done();
+      if (request.generation === requestGeneration.current) setTrendLoading(false);
     }
   }, [beginRequest]);
 
