@@ -311,7 +311,7 @@ func TestMarketIntelSearchPortConstruction(t *testing.T) {
 	// credentials 是凭证读取适配器。
 	credentials := NewSourcingCredentialReader(store)
 	// port 是被测搜索端口。
-	port := NewMarketIntelSearchPort(gateway, credentials, userID, "acc")
+	port := NewMarketIntelSearchPort(gateway, credentials, store.Admin, userID, "acc")
 	if port == nil {
 		t.Fatal("搜索端口构造不应为 nil")
 	}

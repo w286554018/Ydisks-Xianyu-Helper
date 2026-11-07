@@ -375,9 +375,11 @@ func TestMarketIntelEndpointsContract(t *testing.T) {
 	if createErr != nil {
 		t.Fatalf("投影器创建失败: %v", createErr)
 	}
+	// updateErr 验证词表更新经 HTTP 应用端口投影后可写入真实服务。
 	if updateErr := srv.applications.marketIntel.UpdateKeyword(context.Background(), created.ID, "投影测试词", true); updateErr != nil {
 		t.Fatalf("投影器更新失败: %v", updateErr)
 	}
+	// deleteErr 验证端口投影删除测试关注词时保留底层错误语义。
 	if deleteErr := srv.applications.marketIntel.DeleteKeyword(context.Background(), created.ID); deleteErr != nil {
 		t.Fatalf("投影器删除失败: %v", deleteErr)
 	}
@@ -388,6 +390,7 @@ func TestMarketIntelEndpointsContract(t *testing.T) {
 	if enableErr != nil {
 		t.Fatalf("投影器扫描前置创建失败: %v", enableErr)
 	}
+	// scanErr 应保留真实服务缺少搜索能力的错误，避免投影器误报扫描成功。
 	if _, scanErr := srv.applications.marketIntel.RunDailyScan(context.Background()); scanErr == nil {
 		t.Fatal("无搜索能力时扫描应返回错误")
 	}

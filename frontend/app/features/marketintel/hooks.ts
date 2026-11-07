@@ -312,10 +312,12 @@ export const useMarketIntel = (): MarketIntelState => {
     try {
       // result 是扫描结果摘要。
       const result: ScanResult = await triggerScan();
-      // message 是组装的结果说明。
+      // message 是组装的结果说明；失败词数大于 0 时给出可操作的提示。
       const message = result.stoppedReason
         ? `扫描中止：${result.stoppedReason}（已扫 ${result.scanned} 词）`
-        : `扫描完成：本次 ${result.scanned} 词，跳过 ${result.skipped} 词${result.verdictFailed > 0 ? `，${result.verdictFailed} 词判定失败` : ''}`;
+        : result.failedWords > 0 && result.scanned === 0
+          ? `扫描失败：${result.failedWords} 个词全部未能扫描。请确认账号管理中已有登录的闲鱼账号，再重试。`
+          : `扫描完成：本次 ${result.scanned} 词，跳过 ${result.skipped} 词${result.failedWords > 0 ? `，${result.failedWords} 词失败` : ''}${result.verdictFailed > 0 ? `，${result.verdictFailed} 词判定失败` : ''}`;
       setScanMessage(message);
       await Promise.all([loadKeywords(), loadMomentum(), refreshOverview()]);
     } catch (error /* 扫描错误 */) {

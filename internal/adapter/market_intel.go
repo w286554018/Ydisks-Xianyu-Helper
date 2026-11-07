@@ -22,26 +22,54 @@ type MarketIntelSearchPort struct {
 	gateway *SourcingBrowserGateway
 	// credentials 提供账号 cookie 的解密读取。
 	credentials *SourcingCredentialReader
+	// admin 是管理员账号目录，用于自动选择扫描账号。
+	admin *db.AdminQueries
 	// userID 是执行扫描的账号归属用户（系统任务使用管理员）。
 	userID int64
-	// cookieID 是执行搜索的账号标识。
+	// cookieID 是显式指定的扫描账号；为空时自动选择第一个账号。
 	cookieID string
 }
 
-// NewMarketIntelSearchPort 构造市场情报搜索端口。
-func NewMarketIntelSearchPort(gateway *SourcingBrowserGateway, credentials *SourcingCredentialReader, userID int64, cookieID string) *MarketIntelSearchPort {
-	return &MarketIntelSearchPort{gateway: gateway, credentials: credentials, userID: userID, cookieID: cookieID}
+// NewMarketIntelSearchPort 构造市场情报搜索端口；cookieID 为空时每次搜索自动选第一个账号。
+func NewMarketIntelSearchPort(gateway *SourcingBrowserGateway, credentials *SourcingCredentialReader, admin *db.AdminQueries, userID int64, cookieID string) *MarketIntelSearchPort {
+	return &MarketIntelSearchPort{gateway: gateway, credentials: credentials, admin: admin, userID: userID, cookieID: cookieID}
 }
 
-// SearchKeyword 以配置账号的登录态执行单词搜索；错误语义与 sourcing 一致。
+// resolveCookieID 返回本次搜索使用的账号标识：显式配置优先，否则自动选第一个账号。
+func (p *MarketIntelSearchPort) resolveCookieID(ctx context.Context) (string, error) {
+	// trimmed 是去空白后的显式账号。
+	trimmed := strings.TrimSpace(p.cookieID)
+	if trimmed != "" {
+		return trimmed, nil
+	}
+	if p.admin == nil {
+		return "", errors.New("市场情报扫描账号未配置且无账号目录")
+	}
+	// cookies 是全部账号摘要。
+	cookies, err := p.admin.ListCookies(ctx)
+	if err != nil {
+		return "", fmt.Errorf("读取账号目录失败: %w", err)
+	}
+	if len(cookies) == 0 {
+		return "", errors.New("没有可用的闲鱼账号，请先在账号管理添加并登录")
+	}
+	return cookies[0].ID, nil
+}
+
+// SearchKeyword 以扫描账号的登录态执行单词搜索；错误语义与 sourcing 一致。
 func (p *MarketIntelSearchPort) SearchKeyword(ctx context.Context, keyword string) ([]marketintel.SearchResultItem, error) {
+	// cookieID 是本次搜索使用的账号标识。
+	cookieID, err := p.resolveCookieID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// cookieStr 是解密后的登录态；读取失败直接返回错误。
-	cookieStr, err := p.credentials.ReadCookie(ctx, p.userID, p.cookieID)
+	cookieStr, err := p.credentials.ReadCookie(ctx, p.userID, cookieID)
 	if err != nil {
 		return nil, fmt.Errorf("读取扫描账号登录态失败: %w", err)
 	}
 	// items 是浏览器搜索结果。
-	items, err := p.gateway.SearchItems(ctx, p.cookieID, cookieStr, keyword)
+	items, err := p.gateway.SearchItems(ctx, cookieID, cookieStr, keyword)
 	if err != nil {
 		return nil, err
 	}

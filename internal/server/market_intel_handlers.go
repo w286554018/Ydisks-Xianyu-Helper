@@ -54,6 +54,8 @@ type marketIntelScanResponse struct {
 	Scanned int `json:"scanned"`
 	// Skipped 是幂等跳过的词数。
 	Skipped int `json:"skipped"`
+	// FailedWords 是扫描失败的词数。
+	FailedWords int `json:"failed_words"`
 	// VerdictFailed 是判定失败的词数。
 	VerdictFailed int `json:"verdict_failed"`
 	// StoppedReason 是中止原因；正常跑完为空。
@@ -239,7 +241,7 @@ func (s *Server) scanMarketIntel(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, marketIntelScanResponse{
 		Date: result.Date, Scanned: result.Scanned, Skipped: result.Skipped,
-		VerdictFailed: result.VerdictFailed, StoppedReason: result.StoppedReason,
+		FailedWords: result.FailedWords, VerdictFailed: result.VerdictFailed, StoppedReason: result.StoppedReason,
 	})
 }
 

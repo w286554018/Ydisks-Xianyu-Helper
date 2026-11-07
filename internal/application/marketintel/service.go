@@ -160,6 +160,8 @@ type ScanResult struct {
 	Scanned int `json:"scanned"`
 	// Skipped 是因幂等跳过的词数。
 	Skipped int `json:"skipped"`
+	// FailedWords 是本次扫描失败的词数（含账号/浏览器不可用等错误）。
+	FailedWords int `json:"failed_words"`
 	// VerdictFailed 是判定失败的词数。
 	VerdictFailed int `json:"verdict_failed"`
 	// StoppedReason 是中止原因；正常跑完为空。
@@ -203,6 +205,7 @@ func (s *Service) RunDailyScan(ctx context.Context) (ScanResult, error) {
 				return result, ErrSessionExpired
 			}
 			s.logger.Warn("市场情报单词扫描失败，继续下一个词", "keyword", keyword.Keyword, "err", scanErr)
+			result.FailedWords++
 			continue
 		}
 		result.Scanned++

@@ -4259,6 +4259,7 @@ export interface components {
             date: string;
             scanned: number;
             skipped: number;
+            failed_words: number;
             verdict_failed: number;
             stopped_reason?: string;
         };

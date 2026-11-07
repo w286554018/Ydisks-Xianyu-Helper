@@ -11454,11 +11454,12 @@ components:
         success: {type: boolean}
     MarketIntelScanResponse:
       type: object
-      required: [date, scanned, skipped, verdict_failed]
+      required: [date, scanned, skipped, failed_words, verdict_failed]
       properties:
         date: {type: string}
         scanned: {type: integer}
         skipped: {type: integer}
+        failed_words: {type: integer}
         verdict_failed: {type: integer}
         stopped_reason: {type: string}
     MarketIntelAggregate:

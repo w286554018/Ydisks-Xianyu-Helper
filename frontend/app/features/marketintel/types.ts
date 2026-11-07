@@ -121,6 +121,8 @@ export interface ScanResult {
   scanned: number;
   /** skipped 是幂等跳过词数。 */
   skipped: number;
+  /** failedWords 是扫描失败词数。 */
+  failedWords: number;
   /** verdictFailed 是判定失败词数。 */
   verdictFailed: number;
   /** stoppedReason 是中止原因。 */

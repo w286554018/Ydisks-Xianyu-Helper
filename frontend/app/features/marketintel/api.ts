@@ -56,7 +56,7 @@ export const deleteKeyword = async (id: number, options?: RequestControlOptions)
 export const triggerScan = async (options?: RequestControlOptions): Promise<ScanResult> => {
   // data 是扫描接口的传输 DTO。
   const data = await runContractRequest(/* signal 控制扫描请求的取消和超时。 */ signal => contractClient.POST('/api/v1/market-intel/scan', { body: {} as never, signal }), { timeoutMs: SCAN_REQUEST_TIMEOUT_MS, ...options });
-  return { date: data.date, scanned: data.scanned, skipped: data.skipped, verdictFailed: data.verdict_failed, stoppedReason: data.stopped_reason };
+  return { date: data.date, scanned: data.scanned, skipped: data.skipped, failedWords: data.failed_words, verdictFailed: data.verdict_failed, stoppedReason: data.stopped_reason };
 };
 
 /** fetchOverview 读取市场情报概览。 */

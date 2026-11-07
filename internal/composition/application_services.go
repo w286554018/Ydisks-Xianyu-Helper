@@ -381,7 +381,7 @@ type TransportPorts struct {
 	RuntimeLogs *logsapp.Service
 }
 
-// TransportPorts 返回已完成构造的只读服务引用；调用方不得在运行期替换任何字段。
+// TransportPorts 将 services 中已构造的服务完整投影为 HTTP 层只读端口；可并发读取，nil 接收者返回空集合，调用方不得在运行期替换字段。
 func (services *Services) TransportPorts() TransportPorts {
 	if services == nil {
 		return TransportPorts{}
@@ -392,6 +392,7 @@ func (services *Services) TransportPorts() TransportPorts {
 		ItemCategoryRecommendation: services.itemCategoryRecommendation, ItemBatchPreviewPersistence: services.itemBatchPreviewPersistence,
 		ItemBatchLocalPublish: services.itemBatchLocalPublish, ItemSync: services.itemSync, ItemCatalog: services.itemCatalog,
 		ItemCatalogMutation: services.itemCatalogMutation, ItemAISettings: services.itemAISettings, AccountLogin: services.accountLogin, QRLogin: services.qrLogin,
+		ItemCopyPublish: services.itemCopyPublish, ItemLifecycle: services.itemLifecycle,
 		PlatformCredentials: services.platformCredentials, Authentication: services.authentication, LoginAudit: services.loginAudit,
 		PasswordLogin: services.passwordLogin, AccountDelete: services.accountDelete, AccountProfile: services.accountProfile,
 		AccountLongLogin: services.accountLongLogin, AccountSettings: services.accountSettings, AccountRuntime: services.accountRuntime,
@@ -542,7 +543,7 @@ func buildAccountServiceBundle(dependencies Dependencies) (accountServiceBundle,
 	}, nil
 }
 
-// New 由进程组合根装配全部应用服务，并在启动前拒绝半初始化依赖。
+// New 使用 dependencies 提供的进程依赖装配应用服务，缺失必需依赖或构造失败时返回错误；可选市场情报服务沿用运行时提供的实例，不启动后台任务。
 func New(dependencies Dependencies) (*Services, error) {
 	if dependencies.OrderDependencies == nil || dependencies.AccountDependencies == nil || dependencies.ItemDependencies == nil || dependencies.ChatDependencies == nil || dependencies.AutomationDependencies == nil || dependencies.TransportApplications == nil || dependencies.OrderReconciliationRecovery == nil || dependencies.Manager == nil || dependencies.MTopClient == nil || dependencies.LongLoginClient == nil || dependencies.QRLogin == nil || dependencies.UpdateRunningCookie == nil || dependencies.LifecycleContext == nil {
 		return nil, fmt.Errorf("应用服务组合依赖不完整")
@@ -619,7 +620,7 @@ func New(dependencies Dependencies) (*Services, error) {
 		chat:                   buildChatApplication(dependencies),
 		uncertainNotifications: dependencies.TransportApplications.UncertainNotifications,
 		notificationChannels:   dependencies.TransportApplications.NotificationChannels,
-		analytics:              dependencies.TransportApplications.Analytics, sourcing: dependencies.Sourcing, marketIntel: dependencies.TransportApplications.MarketIntel,
+		analytics:              dependencies.TransportApplications.Analytics, sourcing: dependencies.Sourcing, marketIntel: dependencies.MarketIntel,
 		automationRules:        dependencies.TransportApplications.AutomationRules,
 		deliveryTemplates:      dependencies.TransportApplications.DeliveryTemplates,
 		cards:                  dependencies.TransportApplications.Cards,
