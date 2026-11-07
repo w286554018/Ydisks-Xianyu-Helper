@@ -304,36 +304,7 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 	if retErr := sourcingRetError(finalRets); retErr != nil {
 		return nil, retErr
 	}
-	// 接口结构化数据优先；DOM 兜底数据补齐接口缺失的卖家信息（按商品 ID 对齐）。
-	if len(finalAPIItems) > 0 {
-		// domIndex 是 DOM 提取结果的商品 ID 索引。
-		domIndex := make(map[string]SearchItem, len(items))
-		// domItem 遍历建立索引。
-		for _, domItem := range items {
-			domIndex[domItem.ItemID] = domItem
-		}
-		// merged 是合并后的最终集合。
-		merged := make([]SearchItem, 0, len(finalAPIItems))
-		// apiItem 遍历接口数据，缺省字段用 DOM 值补齐。
-		for _, apiItem := range finalAPIItems {
-			if apiItem.Title == "" || apiItem.Price == "" || apiItem.WantCount == "" {
-				// domMatch 是同商品的 DOM 提取结果。
-				if domMatch, exists := domIndex[apiItem.ItemID]; exists {
-					if apiItem.Title == "" {
-						apiItem.Title = domMatch.Title
-					}
-					if apiItem.Price == "" {
-						apiItem.Price = domMatch.Price
-					}
-					if apiItem.WantCount == "" {
-						apiItem.WantCount = domMatch.WantCount
-					}
-				}
-			}
-			merged = append(merged, apiItem)
-		}
-		items = merged
-	}
+	items = mergeSearchItems(finalAPIItems, items)
 	if len(items) == 0 {
 		return nil, ErrSourcingNoResult
 	}
@@ -341,6 +312,40 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 		items = items[:sourcingSearchResultLimit]
 	}
 	return items, nil
+}
+
+// mergeSearchItems 合并搜索接口结构化数据与 DOM 兜底数据：接口优先，缺省字段按商品 ID 用 DOM 值补齐。
+func mergeSearchItems(apiItems []SearchItem, domItems []SearchItem) []SearchItem {
+	if len(apiItems) == 0 {
+		return domItems
+	}
+	// domIndex 是 DOM 提取结果的商品 ID 索引。
+	domIndex := make(map[string]SearchItem, len(domItems))
+	// domItem 遍历建立索引。
+	for _, domItem := range domItems {
+		domIndex[domItem.ItemID] = domItem
+	}
+	// merged 是合并后的最终集合。
+	merged := make([]SearchItem, 0, len(apiItems))
+	// apiItem 遍历接口数据，缺省字段用 DOM 值补齐。
+	for _, apiItem := range apiItems {
+		if apiItem.Title == "" || apiItem.Price == "" || apiItem.WantCount == "" {
+			// domMatch 是同商品的 DOM 提取结果。
+			if domMatch, exists := domIndex[apiItem.ItemID]; exists {
+				if apiItem.Title == "" {
+					apiItem.Title = domMatch.Title
+				}
+				if apiItem.Price == "" {
+					apiItem.Price = domMatch.Price
+				}
+				if apiItem.WantCount == "" {
+					apiItem.WantCount = domMatch.WantCount
+				}
+			}
+		}
+		merged = append(merged, apiItem)
+	}
+	return merged
 }
 
 // extractSearchItems 从当前页面抓取商品卡片并解析为结构化摘要；解析失败的卡片会被跳过。
