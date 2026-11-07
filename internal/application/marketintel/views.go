@@ -61,6 +61,22 @@ type queryPersistence interface {
 	ListAggregates(ctx context.Context, keyword string, limitDays int) ([]AggregateView, error)
 	// ListSellerStats 返回窗口天数内按卖家聚合的统计（降序）。
 	ListSellerStats(ctx context.Context, days int) ([]SellerStat, error)
+	// ListKeywordItems 返回某词最新一天的快照商品列表。
+	ListKeywordItems(ctx context.Context, keyword string) ([]ItemSummary, error)
+}
+
+// ItemSummary 是快照商品的列表摘要。
+type ItemSummary struct {
+	// ItemID 是平台商品标识。
+	ItemID string `json:"item_id"`
+	// Title 是商品标题。
+	Title string `json:"title"`
+	// Price 是价格文本。
+	Price string `json:"price"`
+	// WantCountText 是想要人数文本。
+	WantCountText string `json:"want_count_text"`
+	// SellerNickname 是卖家昵称。
+	SellerNickname string `json:"seller_nickname"`
 }
 
 // LatestAggregates 返回各关注词最新一天的聚合摘要。
@@ -71,6 +87,24 @@ func (s *Service) LatestAggregates(ctx context.Context) ([]AggregateView, error)
 		return []AggregateView{}, nil
 	}
 	return qp.ListLatestAggregates(ctx)
+}
+
+// ListKeywordItems 返回某词最新一天的快照商品列表。
+func (s *Service) ListKeywordItems(ctx context.Context, keyword string) ([]ItemSummary, error) {
+	// qp 是查询持久化边界。
+	qp, ok := s.scan.(queryPersistence)
+	if !ok {
+		return []ItemSummary{}, nil
+	}
+	// items 是商品列表。
+	items, err := qp.ListKeywordItems(ctx, keyword)
+	if err != nil {
+		return nil, fmt.Errorf("读取商品列表失败: %w", err)
+	}
+	if items == nil {
+		items = []ItemSummary{}
+	}
+	return items, nil
 }
 
 // KeywordTrend 返回单词的趋势曲线；词不存在时返回 ErrKeywordNotFound。

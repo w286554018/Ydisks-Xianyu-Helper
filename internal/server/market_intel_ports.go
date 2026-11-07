@@ -28,6 +28,16 @@ type MarketIntelPort interface {
 	SellerBoard(ctx context.Context, days int) (marketintel.SellerBoardView, error)
 	// EnsureSeedKeywords 在词表为空时写入种子词（幂等）。
 	EnsureSeedKeywords(ctx context.Context) error
+	// GetCompetitorDetail 返回竞品详情（7 天缓存，未命中实时抓取）。
+	GetCompetitorDetail(ctx context.Context, itemID string) (marketintel.CompetitorDetail, error)
+	// RewriteCompetitorCopy 用 AI 改写竞品文案。
+	RewriteCompetitorCopy(ctx context.Context, title, desc string) (marketintel.RewrittenCopy, error)
+	// AnalyzeCompetitorSellingPoints 用 AI 分析竞品卖点。
+	AnalyzeCompetitorSellingPoints(ctx context.Context, title, desc, price, wantCount string) (string, error)
+	// CarryCompetitorItem 执行一键搬运：文案改写 + 图片入资源库，返回预填数据。
+	CarryCompetitorItem(ctx context.Context, userID int64, itemID string) (marketintel.CarryResult, error)
+	// ListKeywordItems 返回某词最新一天的快照商品列表。
+	ListKeywordItems(ctx context.Context, keyword string) ([]marketintel.ItemSummary, error)
 }
 
 // marketIntelApplication 返回当前 Server 绑定的市场情报用例端口；未装配时返回 nil。
@@ -39,6 +49,8 @@ func (s *Server) marketIntelApplication() MarketIntelPort {
 type marketIntelKeywordProjector struct {
 	// service 是组合根装配的市场情报应用服务。
 	service *marketintel.Service
+	// carry 是组合根装配的竞品一键搬运用例服务；未装配时搬运端点明确降级。
+	carry *marketintel.CarryService
 }
 
 // ListKeywords 返回全部关注词。
@@ -86,10 +98,38 @@ func (p marketIntelKeywordProjector) EnsureSeedKeywords(ctx context.Context) err
 	return p.service.EnsureSeedKeywords(ctx)
 }
 
-// MarketIntelTransportPort 把具体 Service 投影为 transport 端口；nil 服务返回 nil 接口。
-func MarketIntelTransportPort(service *marketintel.Service) MarketIntelPort {
+// GetCompetitorDetail 返回竞品详情。
+func (p marketIntelKeywordProjector) GetCompetitorDetail(ctx context.Context, itemID string) (marketintel.CompetitorDetail, error) {
+	return p.service.GetCompetitorDetail(ctx, itemID)
+}
+
+// RewriteCompetitorCopy 用 AI 改写竞品文案。
+func (p marketIntelKeywordProjector) RewriteCompetitorCopy(ctx context.Context, title, desc string) (marketintel.RewrittenCopy, error) {
+	return p.service.RewriteCompetitorCopy(ctx, title, desc)
+}
+
+// AnalyzeCompetitorSellingPoints 用 AI 分析竞品卖点。
+func (p marketIntelKeywordProjector) AnalyzeCompetitorSellingPoints(ctx context.Context, title, desc, price, wantCount string) (string, error) {
+	return p.service.AnalyzeCompetitorSellingPoints(ctx, title, desc, price, wantCount)
+}
+
+// CarryCompetitorItem 执行一键搬运；搬运用例未装配时返回 ErrImageLibraryUnavailable。
+func (p marketIntelKeywordProjector) CarryCompetitorItem(ctx context.Context, userID int64, itemID string) (marketintel.CarryResult, error) {
+	if p.carry == nil {
+		return marketintel.CarryResult{}, marketintel.ErrImageLibraryUnavailable
+	}
+	return p.carry.CarryCompetitorItem(ctx, userID, itemID)
+}
+
+// ListKeywordItems 返回某词最新一天的快照商品列表。
+func (p marketIntelKeywordProjector) ListKeywordItems(ctx context.Context, keyword string) ([]marketintel.ItemSummary, error) {
+	return p.service.ListKeywordItems(ctx, keyword)
+}
+
+// MarketIntelTransportPort 把具体 Service 与搬运用例投影为 transport 端口；nil 服务返回 nil 接口。
+func MarketIntelTransportPort(service *marketintel.Service, carry *marketintel.CarryService) MarketIntelPort {
 	if service == nil {
 		return nil
 	}
-	return marketIntelKeywordProjector{service: service}
+	return marketIntelKeywordProjector{service: service, carry: carry}
 }

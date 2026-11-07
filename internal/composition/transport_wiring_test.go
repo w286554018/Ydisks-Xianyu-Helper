@@ -42,7 +42,7 @@ func TestNewUsesRuntimeMarketIntelDependency(t *testing.T) {
 	// keywordStore 是测试词表持久化适配器。
 	keywordStore := adapter.NewMarketIntelStore(built.store)
 	// marketService 与生产运行时一样通过专用依赖字段传入，仅调用本地查询能力。
-	marketService := marketintelapp.NewService(keywordStore, adapter.NewMarketIntelScanStore(built.store), nil, nil, built.dependencies.Logger)
+	marketService := marketintelapp.NewService(keywordStore, adapter.NewMarketIntelScanStore(built.store), nil, nil, nil, built.dependencies.Logger)
 	// keyword、createErr 分别是持久化的测试关注词及写入错误。
 	keyword, createErr := marketService.CreateKeyword(ctx, "装配回归测试", true)
 	if createErr != nil {

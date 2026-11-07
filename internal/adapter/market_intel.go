@@ -464,6 +464,33 @@ func (a *MarketIntelScanStore) ListAggregates(ctx context.Context, keyword strin
 	return out, nil
 }
 
+// ListKeywordItems 返回某词最新一天的快照商品列表。
+func (a *MarketIntelScanStore) ListKeywordItems(ctx context.Context, keyword string) ([]marketintel.ItemSummary, error) {
+	// latestDate 是该词最新快照日。
+	latestDate, dateErr := a.store.MarketIntel.LatestSnapshotDate(ctx, keyword)
+	if dateErr != nil {
+		return nil, dateErr
+	}
+	if latestDate == "" {
+		return []marketintel.ItemSummary{}, nil
+	}
+	// snapshots、_ 是该词当天的快照与判定。
+	snapshots, _, err := a.store.MarketIntel.ListSnapshotsWithVerdicts(ctx, keyword, latestDate)
+	if err != nil {
+		return nil, err
+	}
+	// out 是商品摘要集合。
+	out := make([]marketintel.ItemSummary, 0, len(snapshots))
+	// snapshot 是当前快照行。
+	for _, snapshot := range snapshots {
+		out = append(out, marketintel.ItemSummary{
+			ItemID: snapshot.ItemID, Title: snapshot.Title, Price: snapshot.Price,
+			WantCountText: snapshot.WantCountText, SellerNickname: snapshot.SellerNickname,
+		})
+	}
+	return out, nil
+}
+
 // ListSellerStats 返回窗口天数内按卖家聚合的统计：读范围快照，按卖家分组计数与均价，降序取前 20。
 func (a *MarketIntelScanStore) ListSellerStats(ctx context.Context, days int) ([]marketintel.SellerStat, error) {
 	// endDate 是今天（北京时间）。
@@ -519,4 +546,68 @@ func (a *MarketIntelScanStore) ListSellerStats(ctx context.Context, days int) ([
 // beijingLocationFixed 返回北京时间时区（与 sourcing 调度一致）。
 func beijingLocationFixed() *time.Location {
 	return time.FixedZone("CST", 8*3600)
+}
+
+// FetchCompetitorDetail 抓取竞品商品详情并转换为应用视图。
+func (p *MarketIntelSearchPort) FetchCompetitorDetail(ctx context.Context, itemID string) (marketintel.CompetitorDetail, error) {
+	// cookieID 是本次抓取使用的账号标识。
+	cookieID, err := p.resolveCookieID(ctx)
+	if err != nil {
+		return marketintel.CompetitorDetail{}, err
+	}
+	// cookieStr 是解密后的登录态。
+	cookieStr, readErr := p.credentials.ReadCookie(ctx, p.userID, cookieID)
+	if readErr != nil {
+		return marketintel.CompetitorDetail{}, fmt.Errorf("读取扫描账号登录态失败: %w", readErr)
+	}
+	// detail、fetchErr 是浏览器抓取结果与抓取错误。
+	detail, fetchErr := p.gateway.manager.CompetitorItemDetail(ctx, cookieID, cookieStr, itemID)
+	if fetchErr != nil {
+		return marketintel.CompetitorDetail{}, classifyDetailPlatformError(fetchErr)
+	}
+	return marketintel.CompetitorDetail{
+		ItemID: detail.ItemID, Title: detail.Title, Price: detail.Price,
+		DescText: detail.DescText, Images: detail.Images,
+		SellerNickname: detail.SellerNickname, SellerID: detail.SellerID,
+	}, nil
+}
+
+// classifyDetailPlatformError 把浏览器详情抓取错误归类为应用层稳定错误。
+// 风控与会话失效必须让调用方立即中止并给出可操作提示，不能退化为通用 500；
+// 归类为详情专属错误后由 transport 映射为 409，符合「遇风控立即停止、不重试」的平台约定，
+// 同时避免把「今日扫描已中止」这类扫描语义误用给详情请求。
+func classifyDetailPlatformError(err error) error {
+	switch {
+	case errors.Is(err, browser.ErrSourcingRiskControl):
+		return marketintel.ErrCompetitorDetailRiskControl
+	case errors.Is(err, browser.ErrSourcingSessionExpired):
+		return marketintel.ErrCompetitorDetailSessionExpired
+	default:
+		return err
+	}
+}
+
+// LoadDetailRow 读取竞品详情缓存行。
+func (a *MarketIntelScanStore) LoadDetailRow(ctx context.Context, itemID string) (marketintel.DetailCacheRowAlias, error) {
+	// row 是数据库缓存行。
+	row, err := a.store.MarketIntel.GetItemDetail(ctx, itemID)
+	if err != nil {
+		return marketintel.DetailCacheRowAlias{}, err
+	}
+	return marketintel.DetailCacheRowAlias{
+		ItemID: row.ItemID, Title: row.Title, Price: row.Price,
+		DescText: row.DescText, ImagesJSON: row.ImagesJSON,
+		SellerNickname: row.SellerNickname, SellerID: row.SellerID,
+		WantCountText: row.WantCountText, FetchedAt: row.FetchedAt,
+	}, nil
+}
+
+// SaveDetailRow 写入竞品详情缓存行。
+func (a *MarketIntelScanStore) SaveDetailRow(ctx context.Context, row marketintel.DetailCacheRowAlias) error {
+	return a.store.MarketIntel.SaveItemDetail(ctx, db.MarketIntelItemDetailRow{
+		ItemID: row.ItemID, Title: row.Title, Price: row.Price,
+		DescText: row.DescText, ImagesJSON: row.ImagesJSON,
+		SellerNickname: row.SellerNickname, SellerID: row.SellerID,
+		WantCountText: row.WantCountText, FetchedAt: row.FetchedAt,
+	})
 }

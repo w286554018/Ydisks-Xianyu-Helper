@@ -17,6 +17,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -27,38 +28,43 @@ import (
 
 // main 是验证 CLI 的进程入口；参数与运行错误统一由 run 返回退出码。
 func main() {
-	// cleanup 用于本次流程后续判断的cleanup
+	os.Exit(run(os.Args[1:], os.Stdout))
+}
+
+// run 执行完整验证流程；args 是命令行参数，out 是诊断输出目标，返回进程退出码。
+func run(args []string, out io.Writer) int {
+	// cleanup 是失败时回收本次验证写入的临时数据；尚未写入前保持为 nil。
 	var cleanup func() error
-	// fail 用于本次流程后续判断的fail
-	fail := func(format string, args ...any) {
+	// fail 打印失败原因、清理临时数据并返回失败退出码。
+	fail := func(format string, args ...any) int {
 		if cleanup != nil {
-			if // err 用于本次流程后续判断的err
-			err := cleanup(); err != nil {
-				fmt.Printf("⚠️ 清理验证数据失败: %s\n", logsafe.Error(err))
+			// err 是本次调用的返回错误。
+			if err := cleanup(); err != nil {
+				fmt.Fprintf(out, "⚠️ 清理验证数据失败: %s\n", logsafe.Error(err))
 			}
 		}
-		fmt.Printf(format, safeDiagnosticArgs(args)...)
-		os.Exit(1)
+		fmt.Fprintf(out, format, safeDiagnosticArgs(args)...)
+		return 1
 	}
 
-	if len(os.Args) < 2 {
-		fmt.Println("用法: dbverify <database-url>")
-		os.Exit(1)
+	if len(args) < 1 {
+		fmt.Fprintln(out, "用法: dbverify <database-url>")
+		return 1
 	}
-	// url 用于本次流程后续判断的地址
-	url := os.Args[1]
+	// url 是待验证的数据库地址。
+	url := args[0]
 	// ctx、cancel 用于本次流程后续判断的ctx、cancel
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	fmt.Printf("连接 %s ...\n", maskURL(url))
+	fmt.Fprintf(out, "连接 %s ...\n", maskURL(url))
 	// database、dialect、err 用于本次流程后续判断的database、dialect、err
 	database, dialect, err := db.Open(ctx, url)
 	if err != nil {
-		fail("❌ Open 失败: %v\n", err)
+		return fail("❌ Open 失败: %v\n", err)
 	}
 	defer database.Close()
-	fmt.Printf("✅ 迁移成功，方言=%s\n", dialect)
+	fmt.Fprintf(out, "✅ 迁移成功，方言=%s\n", dialect)
 
 	// store 用于本次流程后续判断的store
 	store := db.NewStore(database, dialect)
@@ -84,83 +90,83 @@ func main() {
 	// password、err 用于本次流程后续判断的password、err
 	password, err := newVerifyPassword()
 	if err != nil {
-		fail("❌ 生成验证密码失败: %v\n", err)
+		return fail("❌ 生成验证密码失败: %v\n", err)
 	}
 	// ok、err 用于本次流程后续判断的ok、err
 	ok, err := store.Users.Create(ctx, username, username+"@test.local", password)
 	if err != nil || !ok {
-		fail("❌ 创建用户失败: err=%v ok=%v\n", err, ok)
+		return fail("❌ 创建用户失败: err=%v ok=%v\n", err, ok)
 	}
 	// adminUser、err 用于本次流程后续判断的adminUser、err
 	adminUser, err := store.Users.GetByUsername(ctx, username)
 	if err != nil {
-		fail("❌ 查询验证用户失败: %v\n", err)
+		return fail("❌ 查询验证用户失败: %v\n", err)
 	}
 	// userID 用于本次流程后续判断的用户ID
 	userID := adminUser.ID
-	fmt.Printf("✅ 创建验证用户 %s (id=%d)\n", username, userID)
+	fmt.Fprintf(out, "✅ 创建验证用户 %s (id=%d)\n", username, userID)
 
 	// verifyCookieAndSettings 校验跨方言 Cookie 与设置的 upsert 语义，失败时由 CLI 统一清理临时数据。
 	if err := verifyCookieAndSettings(ctx, store, accountID, userID); err != nil {
-		fail("❌ %v\n", err)
+		return fail("❌ %v\n", err)
 	}
 
 	// 4) 订单 upsert（INSERT IGNORE + 动态 UPDATE）
 	if err := store.Orders.Upsert(ctx, orderID, db.OrderUpsertOpts{
 		ItemID: itemID, BuyerID: buyerID, CookieID: accountID, OrderStatus: "paid", Amount: "19.90",
 	}); err != nil {
-		fail("❌ 订单 Upsert 失败: %v\n", err)
+		return fail("❌ 订单 Upsert 失败: %v\n", err)
 	}
 	// 二次 upsert 验证不重复插入
 	if err := store.Orders.Upsert(ctx, orderID, db.OrderUpsertOpts{
 		OrderStatus: "shipped", ChatID: "chat-1",
 	}); err != nil {
-		fail("❌ 订单二次 Upsert 失败: %v\n", err)
+		return fail("❌ 订单二次 Upsert 失败: %v\n", err)
 	}
-	fmt.Println("✅ 订单 upsert 成功（INSERT IGNORE + UPDATE OK）")
+	fmt.Fprintln(out, "✅ 订单 upsert 成功（INSERT IGNORE + UPDATE OK）")
 
 	// 5) 商品信息 upsert（dialectUpsert，UNIQUE(cookie_id, item_id)）
 	if err := store.Items.Upsert(ctx, &db.ItemInfoRow{
 		CookieID: accountID, ItemID: itemID, ItemTitle: "测试商品", ItemPrice: "19.90",
 	}); err != nil {
-		fail("❌ 商品 Upsert 失败: %v\n", err)
+		return fail("❌ 商品 Upsert 失败: %v\n", err)
 	}
 	if // err 用于本次流程后续判断的err
 	err := store.Items.Upsert(ctx, &db.ItemInfoRow{
 		CookieID: accountID, ItemID: itemID, ItemTitle: "更新后商品", ItemPrice: "29.90",
 	}); err != nil {
-		fail("❌ 商品二次 Upsert 失败: %v\n", err)
+		return fail("❌ 商品二次 Upsert 失败: %v\n", err)
 	}
-	fmt.Println("✅ 商品信息 upsert 成功")
+	fmt.Fprintln(out, "✅ 商品信息 upsert 成功")
 
 	// 6) 卡密创建（boolToInt 布尔写入）
 	cardID, err := store.Cards.Create(ctx, &db.CardFull{
 		Name: "测试卡组", Type: "data", DataContent: "card-1\ncard-2\ncard-3", Enabled: true, UserID: userID,
 	})
 	if err != nil {
-		fail("❌ 创建卡密失败: %v\n", err)
+		return fail("❌ 创建卡密失败: %v\n", err)
 	}
-	fmt.Printf("✅ 创建卡密组 (id=%d)\n", cardID)
+	fmt.Fprintf(out, "✅ 创建卡密组 (id=%d)\n", cardID)
 
 	// 7) 卡密批量追加（AppendBatchData）
 	added, err := store.Cards.AppendBatchData(ctx, cardID, "card-4\ncard-5")
 	if err != nil {
-		fail("❌ 追加卡密失败: %v\n", err)
+		return fail("❌ 追加卡密失败: %v\n", err)
 	}
-	fmt.Printf("✅ 追加卡密 %d 个\n", added)
+	fmt.Fprintf(out, "✅ 追加卡密 %d 个\n", added)
 
 	// 8) 通知渠道 + 绑定（dialectUpsert）
 	chID, err := store.Notifications.CreateChannel(ctx, &db.NotificationChannelRow{
 		Name: "测试渠道", Type: "webhook", Config: `{"webhook_url":"http://x"}`, Enabled: false, UserID: userID,
 	})
 	if err != nil {
-		fail("❌ 创建通知渠道失败: %v\n", err)
+		return fail("❌ 创建通知渠道失败: %v\n", err)
 	}
 	if // err 用于本次流程后续判断的err
 	err := store.Notifications.SetBindings(ctx, accountID, []int64{chID}); err != nil {
-		fail("❌ 绑定通知渠道失败: %v\n", err)
+		return fail("❌ 绑定通知渠道失败: %v\n", err)
 	}
-	fmt.Printf("✅ 通知渠道 + 绑定 OK (channel=%d)\n", chID)
+	fmt.Fprintf(out, "✅ 通知渠道 + 绑定 OK (channel=%d)\n", chID)
 
 	// 9) 自动化规则（TryStartRun 用 INSERT IGNORE + UNIQUE 防重）
 	ruleID, err := store.Automation.Create(ctx, db.AutomationRuleInput{
@@ -168,35 +174,36 @@ func main() {
 		TriggerType: "order_paid", Enabled: false, Priority: 100,
 	})
 	if err != nil {
-		fail("❌ 创建自动化规则失败: %v\n", err)
+		return fail("❌ 创建自动化规则失败: %v\n", err)
 	}
 	// runID、started、err 用于本次流程后续判断的运行ID、started、err
 	runID, started, err := store.Automation.TryStartRun(ctx, db.AutomationRun{
 		RuleID: ruleID, CookieID: accountID, TriggerType: "order_paid", TriggerKey: orderID, Status: "running",
 	})
 	if err != nil || !started {
-		fail("❌ TryStartRun 失败: err=%v started=%v\n", err, started)
+		return fail("❌ TryStartRun 失败: err=%v started=%v\n", err, started)
 	}
 	// 重复触发应 started=false
 	_, started2, err := store.Automation.TryStartRun(ctx, db.AutomationRun{
 		RuleID: ruleID, CookieID: accountID, TriggerType: "order_paid", TriggerKey: orderID, Status: "running",
 	})
 	if err != nil {
-		fail("❌ TryStartRun 二次调用失败: %v\n", err)
+		return fail("❌ TryStartRun 二次调用失败: %v\n", err)
 	}
 	if started2 {
-		fail("❌ TryStartRun 重复触发未防重\n")
+		return fail("❌ TryStartRun 重复触发未防重\n")
 	}
-	fmt.Printf("✅ 自动化规则 + 防重 OK (rule=%d run=%d)\n", ruleID, runID)
+	fmt.Fprintf(out, "✅ 自动化规则 + 防重 OK (rule=%d run=%d)\n", ruleID, runID)
 
-	if // err 用于本次流程后续判断的err
-	err := cleanup(); err != nil {
-		fmt.Printf("❌ 清理验证数据失败: %s\n", logsafe.Error(err))
-		os.Exit(1)
+	// err 是本次调用的返回错误。
+	if err := cleanup(); err != nil {
+		fmt.Fprintf(out, "❌ 清理验证数据失败: %s\n", logsafe.Error(err))
+		return 1
 	}
 	cleanup = nil
-	fmt.Println("✅ 验证数据已清理")
-	fmt.Println("\n🎉 全部验证通过")
+	fmt.Fprintln(out, "✅ 验证数据已清理")
+	fmt.Fprintln(out, "\n🎉 全部验证通过")
+	return 0
 }
 
 // verifyCookieAndSettings 验证 Cookie 状态写入、重复 upsert 和保留字设置项的跨方言行为。

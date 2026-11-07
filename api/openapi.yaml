@@ -9045,6 +9045,192 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/items/{item_id}/detail":
+    get:
+      operationId: getApiV1MarketIntelItemsItemIdDetail
+      summary: 读取竞品商品详情（7 天缓存）
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelDetailResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/items/{item_id}/rewrite":
+    post:
+      operationId: postApiV1MarketIntelItemsItemIdRewrite
+      summary: AI 改写竞品文案
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelRewriteResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/items/{item_id}/analyze":
+    post:
+      operationId: postApiV1MarketIntelItemsItemIdAnalyze
+      summary: AI 分析竞品卖点
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelAnalyzeResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/items/{item_id}/carry":
+    post:
+      operationId: postApiV1MarketIntelItemsItemIdCarry
+      summary: 一键搬运（AI 改写 + 图片入库）
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelCarryResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/market-intel/keywords/{keyword}/items":
+    get:
+      operationId: getApiV1MarketIntelKeywordsKeywordItems
+      summary: 读取某词最新一天的快照商品列表
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: keyword
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIntelKeywordItemsResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/sourcing/hot-keywords/refresh":
     post:
       operationId: postApiV1SourcingHotKeywordsRefresh
@@ -11520,6 +11706,67 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MarketIntelSellerStat'
+    MarketIntelKeywordItem:
+      type: object
+      required: [item_id, title, price, want_count_text, seller_nickname]
+      properties:
+        item_id: {type: string}
+        title: {type: string}
+        price: {type: string}
+        want_count_text: {type: string}
+        seller_nickname: {type: string}
+    MarketIntelKeywordItemsResponse:
+      type: object
+      required: [keyword, items]
+      properties:
+        keyword: {type: string}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketIntelKeywordItem'
+    MarketIntelDetailResponse:
+      type: object
+      required: [item_id, title, price, desc_text, images, seller_nickname, seller_id, cached]
+      properties:
+        item_id: {type: string}
+        title: {type: string}
+        price: {type: string}
+        desc_text: {type: string}
+        images:
+          type: array
+          items: {type: string}
+        seller_nickname: {type: string}
+        seller_id: {type: string}
+        cached: {type: boolean}
+    MarketIntelRewriteResponse:
+      type: object
+      required: [title, desc]
+      properties:
+        title: {type: string}
+        desc: {type: string}
+    MarketIntelAnalyzeResponse:
+      type: object
+      required: [analysis]
+      properties:
+        analysis: {type: string}
+    MarketIntelCarryImage:
+      type: object
+      required: [id, filename]
+      properties:
+        id: {type: integer}
+        filename: {type: string}
+    MarketIntelCarryResponse:
+      type: object
+      required: [title, desc, price, images, same_images_hint]
+      properties:
+        title: {type: string}
+        desc: {type: string}
+        price: {type: string}
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketIntelCarryImage'
+        same_images_hint: {type: string}
     SourcingSearchRequest:
       type: object
       required: [cookie_id, keyword]

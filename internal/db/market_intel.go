@@ -638,3 +638,18 @@ func (m *MarketIntel) ListSnapshotsInRangeWithVerdicts(ctx context.Context, star
 	}
 	return snapshots, verdicts, nil
 }
+
+// LatestSnapshotDate 返回某词最新快照日；无快照返回空串。
+func (m *MarketIntel) LatestSnapshotDate(ctx context.Context, keyword string) (string, error) {
+	if m == nil || m.DB == nil {
+		return "", errors.New("市场情报仓储未初始化")
+	}
+	// date 是最新快照日。
+	var date sql.NullString
+	// err 是查询错误。
+	if err := m.DB.QueryRowContext(ctx,
+		`SELECT MAX(snapshot_date) FROM market_intel_snapshots WHERE keyword=?`, keyword).Scan(&date); err != nil {
+		return "", fmt.Errorf("读取最新快照日失败: %w", err)
+	}
+	return date.String, nil
+}

@@ -123,6 +123,8 @@ type Services struct {
 	sourcing *sourcingapp.Service
 	// marketIntel 是市场情报应用服务；nil 表示功能未启用。
 	marketIntel *marketintelapp.Service
+	// marketIntelCarry 是竞品一键搬运用例服务；nil 表示功能未启用。
+	marketIntelCarry *marketintelapp.CarryService
 	// automationIssues 是自动化异常查询与人工处理应用服务。
 	automationIssues *automationapp.IssueService
 	// automationAudit 是规则日志（自动化行为审计）分页查询应用服务。
@@ -361,7 +363,9 @@ type TransportPorts struct {
 	// Sourcing 是选品参考应用服务；nil 表示功能未启用。
 	Sourcing *sourcingapp.Service
 	// MarketIntel 是市场情报应用服务；nil 表示功能未启用。
-	MarketIntel       *marketintelapp.Service
+	MarketIntel *marketintelapp.Service
+	// MarketIntelCarry 是竞品一键搬运用例服务；nil 表示功能未启用。
+	MarketIntelCarry  *marketintelapp.CarryService
 	AutomationIssues  *automationapp.IssueService
 	AutomationAudit   *automationapp.AuditService
 	AutomationRules   *automationapp.RuleService
@@ -398,7 +402,7 @@ func (services *Services) TransportPorts() TransportPorts {
 		AccountLongLogin: services.accountLongLogin, AccountSettings: services.accountSettings, AccountRuntime: services.accountRuntime,
 		AccountSummaries: services.accountSummaries, AccountTasks: services.accountTasks, Chat: services.chat,
 		UncertainNotifications: services.uncertainNotifications, NotificationChannels: services.notificationChannels,
-		Analytics: services.analytics, Sourcing: services.sourcing, MarketIntel: services.marketIntel, AutomationIssues: services.automationIssues, AutomationAudit: services.automationAudit, AutomationRules: services.automationRules, DeliveryTemplates: services.deliveryTemplates,
+		Analytics: services.analytics, Sourcing: services.sourcing, MarketIntel: services.marketIntel, MarketIntelCarry: services.marketIntelCarry, AutomationIssues: services.automationIssues, AutomationAudit: services.automationAudit, AutomationRules: services.automationRules, DeliveryTemplates: services.deliveryTemplates,
 		Cards: services.cards, APICardTester: services.apiCardTester, PublishAutomationRules: services.publishAutomationRules, DefaultReplies: services.defaultReplies, ItemGreetings: services.itemGreetings, Library: services.library,
 		Keywords: services.keywords, Settings: services.settings, Admin: services.admin, RuntimeLogs: services.runtimeLogs,
 	}
@@ -579,6 +583,12 @@ func New(dependencies Dependencies) (*Services, error) {
 	if catalogErr != nil {
 		return nil, catalogErr
 	}
+	// marketIntelCarry、marketIntelCarryErr 分别是竞品一键搬运用例服务及其组合期错误。
+	// 资源库服务在本函数内构造，因此搬运用例只能在此处而非运行时装配阶段接线。
+	marketIntelCarry, marketIntelCarryErr := buildMarketIntelCarry(dependencies.MarketIntel, libraryService)
+	if marketIntelCarryErr != nil {
+		return nil, marketIntelCarryErr
+	}
 	// services 是完成构造后只读注入 Server 的应用服务集合。
 	services := &Services{
 		library:                     libraryService,
@@ -620,7 +630,7 @@ func New(dependencies Dependencies) (*Services, error) {
 		chat:                   buildChatApplication(dependencies),
 		uncertainNotifications: dependencies.TransportApplications.UncertainNotifications,
 		notificationChannels:   dependencies.TransportApplications.NotificationChannels,
-		analytics:              dependencies.TransportApplications.Analytics, sourcing: dependencies.Sourcing, marketIntel: dependencies.MarketIntel,
+		analytics:              dependencies.TransportApplications.Analytics, sourcing: dependencies.Sourcing, marketIntel: dependencies.MarketIntel, marketIntelCarry: marketIntelCarry,
 		automationRules:        dependencies.TransportApplications.AutomationRules,
 		deliveryTemplates:      dependencies.TransportApplications.DeliveryTemplates,
 		cards:                  dependencies.TransportApplications.Cards,

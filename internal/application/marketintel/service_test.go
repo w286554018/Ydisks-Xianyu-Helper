@@ -203,7 +203,7 @@ func newTestService(t *testing.T) (*Service, *fakeStore, *fakeScanStore, *fakeSe
 	// verdict 是判定端口替身。
 	verdict := &fakeVerdict{}
 	// service 是被测服务。
-	service := NewService(store, scanStore, search, verdict, nil).
+	service := NewService(store, scanStore, search, verdict, nil, nil).
 		WithClock(func() time.Time { return time.Date(2026, 11, 5, 10, 0, 0, 0, time.FixedZone("CST", 8*3600)) })
 	return service, store, scanStore, search, verdict
 }

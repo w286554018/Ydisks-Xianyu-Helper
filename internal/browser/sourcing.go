@@ -380,10 +380,16 @@ func extractSearchItems(page playwright.Page) []SearchItem {
 	if decodeErr := json.Unmarshal(encoded, &payload); decodeErr != nil {
 		return nil
 	}
+	return buildSearchItems(payload.Cards)
+}
+
+// buildSearchItems 把页面卡片原始文本解析为商品摘要；空文本与完全无信息的卡片被跳过。
+// 该函数是纯函数，可用真实卡片文本做确定性回归。
+func buildSearchItems(cards []sourcingSearchCard) []SearchItem {
 	// out 汇总解析成功的商品摘要。
-	out := make([]SearchItem, 0, len(payload.Cards))
+	out := make([]SearchItem, 0, len(cards))
 	// card 是当前遍历到的卡片。
-	for _, card := range payload.Cards {
+	for _, card := range cards {
 		// trimmedText 是去多余空白后的卡片文本，用于拆分标题与附加信息。
 		trimmedText := strings.Join(strings.Fields(card.Text), " ")
 		if trimmedText == "" {

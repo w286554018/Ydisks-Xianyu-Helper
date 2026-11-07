@@ -269,6 +269,8 @@ type fakeMarketIntelPort struct {
 	scanErr error
 	// scanResult 是扫描触发的返回摘要。
 	scanResult marketintel.ScanResult
+	// carryErr 是搬运触发的返回错误。
+	carryErr error
 }
 
 // ListKeywords 返回固定词表。
@@ -312,6 +314,38 @@ func (f *fakeMarketIntelPort) SellerBoard(_ context.Context, days int) (marketin
 
 // EnsureSeedKeywords 固定成功。
 func (f *fakeMarketIntelPort) EnsureSeedKeywords(context.Context) error { return nil }
+
+// GetCompetitorDetail 返回固定详情。
+func (f *fakeMarketIntelPort) GetCompetitorDetail(_ context.Context, itemID string) (marketintel.CompetitorDetail, error) {
+	return marketintel.CompetitorDetail{ItemID: itemID, Title: "AI课程代做", Price: "99", DescText: "专业代做", Images: []string{"http://127.0.0.1:1/unreachable.jpg"}, SellerNickname: "卖家甲", SellerID: "u1"}, nil
+}
+
+// RewriteCompetitorCopy 返回固定改写结果。
+func (f *fakeMarketIntelPort) RewriteCompetitorCopy(context.Context, string, string) (marketintel.RewrittenCopy, error) {
+	return marketintel.RewrittenCopy{Title: "AI课程辅导定制", Desc: "一对一辅导"}, nil
+}
+
+// AnalyzeCompetitorSellingPoints 返回固定分析。
+func (f *fakeMarketIntelPort) AnalyzeCompetitorSellingPoints(context.Context, string, string, string, string) (string, error) {
+	return "核心卖点：定制化；文案套路：价格锚点", nil
+}
+
+// CarryCompetitorItem 返回固定搬运结果（图片入库由应用层完成，此处只验证 transport 转换）。
+func (f *fakeMarketIntelPort) CarryCompetitorItem(_ context.Context, userID int64, itemID string) (marketintel.CarryResult, error) {
+	if f.carryErr != nil {
+		return marketintel.CarryResult{}, f.carryErr
+	}
+	return marketintel.CarryResult{
+		Title: "AI课程辅导定制", Desc: "一对一辅导", Price: "99",
+		Images:         []marketintel.CarryUploadedImage{{ID: 9, Filename: "carry-" + itemID + "-0.jpg"}},
+		SameImagesHint: marketintel.CarrySameImagesHint,
+	}, nil
+}
+
+// ListKeywordItems 返回固定商品列表。
+func (f *fakeMarketIntelPort) ListKeywordItems(_ context.Context, keyword string) ([]marketintel.ItemSummary, error) {
+	return []marketintel.ItemSummary{{ItemID: "i1", Title: "AI课程代做", Price: "99", WantCountText: "120人想要", SellerNickname: "卖家甲"}}, nil
+}
 
 // marketIntelRequest 以给定会话向市场情报路由发送请求。
 func marketIntelRequest(handler http.Handler, cookie *http.Cookie, method, path, body string) (*httptest.ResponseRecorder, *http.Request) {
@@ -357,9 +391,9 @@ func TestMarketIntelEndpointsContract(t *testing.T) {
 	realService := marketintel.NewService(
 		adapter.NewMarketIntelStore(store),
 		&marketIntelNoopScan{},
-		nil, nil, nil,
+		nil, nil, nil, nil,
 	)
-	srv.applications.marketIntel = MarketIntelTransportPort(realService)
+	srv.applications.marketIntel = MarketIntelTransportPort(realService, nil)
 	// 词表读取走投影器。
 	projectionList, projectionErr := srv.applications.marketIntel.ListKeywords(context.Background())
 	if projectionErr != nil || projectionList == nil {

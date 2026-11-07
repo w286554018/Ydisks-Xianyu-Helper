@@ -268,3 +268,109 @@ func parseVerdictContent(content string, items []marketintel.VerdictInput) ([]ma
 	}
 	return out, nil
 }
+
+// rewriteSystemPrompt 是文案改写的系统提示。
+const rewriteSystemPrompt = `你是闲鱼商品文案改写助手。用户会给出一个竞品商品的标题和描述。
+请改写成一套全新的标题和描述：保留商品的核心卖点和信息，但必须使用不同的措辞、句式和结构，
+不能与原文高度相似（避免平台重复商品判定）。保持闲鱼卖家的口语化风格。
+只输出 JSON 对象，格式：{"title":"<改写后标题，30字内>","desc":"<改写后描述，200字内>"}。`
+
+// analyzeSystemPrompt 是卖点分析的系统提示。
+const analyzeSystemPrompt = `你是闲鱼市场分析助手。用户会给出一个竞品商品的标题、描述、价格和想要人数。
+请分析：1. 这个商品的核心卖点是什么；2. 文案用了什么套路（如紧迫感、价格锚点、信任背书）；
+3. 如果你要卖同类商品，可以借鉴什么。用简洁的中文分点回答，300 字内。`
+
+// RewriteCopy 用市场情报模型改写竞品文案；解析失败一次性返回错误不重试。
+func (p *MarketIntelVerdictPort) RewriteCopy(ctx context.Context, title, desc string) (marketintel.RewrittenCopy, error) {
+	// cfg 是判定模型配置。
+	cfg, err := p.loadConfig(ctx)
+	if err != nil {
+		return marketintel.RewrittenCopy{}, err
+	}
+	// content 是模型输出正文。
+	content, err := p.chatCompletion(ctx, cfg, rewriteSystemPrompt,
+		fmt.Sprintf("竞品标题：%s\n竞品描述：%s", title, desc))
+	if err != nil {
+		return marketintel.RewrittenCopy{}, err
+	}
+	// parsed 是解析后的改写结果。
+	var parsed struct {
+		Title string `json:"title"`
+		Desc  string `json:"desc"`
+	}
+	// trimmed 是去栅栏后的正文。
+	trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(content), "```json"), "```"))
+	trimmed = strings.TrimSuffix(trimmed, "```")
+	// unmarshalErr 是 JSON 解析错误。
+	if unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(trimmed)), &parsed); unmarshalErr != nil {
+		return marketintel.RewrittenCopy{}, fmt.Errorf("改写结果不是合法 JSON: %w", unmarshalErr)
+	}
+	if strings.TrimSpace(parsed.Title) == "" {
+		return marketintel.RewrittenCopy{}, errors.New("改写结果缺少标题")
+	}
+	return marketintel.RewrittenCopy{Title: strings.TrimSpace(parsed.Title), Desc: strings.TrimSpace(parsed.Desc)}, nil
+}
+
+// AnalyzeSellingPoints 用市场情报模型分析竞品卖点。
+func (p *MarketIntelVerdictPort) AnalyzeSellingPoints(ctx context.Context, title, desc, price, wantCount string) (string, error) {
+	// cfg 是判定模型配置。
+	cfg, err := p.loadConfig(ctx)
+	if err != nil {
+		return "", err
+	}
+	return p.chatCompletion(ctx, cfg, analyzeSystemPrompt,
+		fmt.Sprintf("标题：%s\n描述：%s\n价格：%s\n想要人数：%s", title, desc, price, wantCount))
+}
+
+// chatCompletion 发送一次对话请求并返回模型正文（复用判定端口的请求路径）。
+func (p *MarketIntelVerdictPort) chatCompletion(ctx context.Context, cfg marketIntelModelConfig, systemPrompt, userPrompt string) (string, error) {
+	// client 是受出站策略约束的 HTTP 客户端。
+	client, clientErr := p.newHTTPClient(cfg.baseURL)
+	if clientErr != nil {
+		return "", fmt.Errorf("市场情报模型地址无效: %w", clientErr)
+	}
+	// body 是请求正文。
+	body, marshalErr := json.Marshal(marketIntelChatRequest{
+		Model: cfg.model,
+		Messages: []marketIntelChatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+		MaxTokens:   marketIntelAIMaxTokens,
+		Temperature: 0.3,
+	})
+	if marshalErr != nil {
+		return "", fmt.Errorf("构造请求失败: %w", marshalErr)
+	}
+	// request 是绑定调用方取消信号的请求。
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, cfg.baseURL+"/chat/completions", bytes.NewReader(body))
+	if requestErr != nil {
+		return "", requestErr
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(cfg.apiKey))
+	// response 是远端响应。
+	response, doErr := client.Do(request)
+	if doErr != nil {
+		return "", errors.New("连接市场情报模型失败")
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", fmt.Errorf("市场情报模型请求失败 (HTTP %d)", response.StatusCode)
+	}
+	// raw 是响应正文。
+	raw, readErr := io.ReadAll(io.LimitReader(response.Body, marketIntelAIResponseLimit))
+	if readErr != nil {
+		return "", fmt.Errorf("读取响应失败: %w", readErr)
+	}
+	// payload 是解析后的兼容响应。
+	var payload marketIntelChatResponse
+	// decodeErr 表示响应不是可解析 JSON。
+	if decodeErr := json.Unmarshal(raw, &payload); decodeErr != nil {
+		return "", errors.New("市场情报模型返回了无法解析的响应")
+	}
+	if len(payload.Choices) == 0 {
+		return "", errors.New("市场情报模型返回空结果")
+	}
+	return strings.TrimSpace(payload.Choices[0].Message.Content), nil
+}

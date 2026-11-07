@@ -113,6 +113,8 @@ type Service struct {
 	search SearchPort
 	// verdict 是 AI 判定端口；可为空（未配置模型时只落快照不判定）。
 	verdict VerdictPort
+	// detail 是竞品详情抓取端口；可为空（浏览器不可用时详情功能降级）。
+	detail detailFetcher
 	// logger 记录扫描执行日志，不记录任何凭证。
 	logger *slog.Logger
 	// now 返回当前时间，测试注入确定时钟。
@@ -124,12 +126,12 @@ type Service struct {
 }
 
 // NewService 构造市场情报服务；scan 与 search 必填，verdict 可空。
-func NewService(store Store, scan scanPersistence, search SearchPort, verdict VerdictPort, logger *slog.Logger) *Service {
+func NewService(store Store, scan scanPersistence, search SearchPort, verdict VerdictPort, detail detailFetcher, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Service{
-		store: store, scan: scan, search: search, verdict: verdict, logger: logger,
+		store: store, scan: scan, search: search, verdict: verdict, detail: detail, logger: logger,
 		now:      func() time.Time { return time.Now() },
 		location: time.FixedZone("CST", 8*3600),
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),

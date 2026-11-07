@@ -99,3 +99,115 @@ export const fetchSellerBoard = async (days: number, options?: RequestControlOpt
     sellers: (data.sellers ?? []).map(/* sellerStat 归一卖家统计。 */ seller => ({ nickname: seller.nickname, appearances: seller.appearances, avgPrice: seller.avg_price ?? '', sampleUrl: seller.sample_url })),
   };
 };
+
+/** DETAIL_REQUEST_TIMEOUT_MS 是竞品详情抓取的请求超时；实时抓取需要打开详情页。 */
+const DETAIL_REQUEST_TIMEOUT_MS = 90_000;
+
+/** CompetitorDetailData 是竞品详情视图。 */
+export interface CompetitorDetailData {
+  /** itemId 是平台商品标识。 */
+  itemId: string;
+  /** title 是商品标题。 */
+  title: string;
+  /** price 是价格文本。 */
+  price: string;
+  /** descText 是商品描述纯文本。 */
+  descText: string;
+  /** images 是商品图片 URL 列表。 */
+  images: string[];
+  /** sellerNickname 是卖家昵称。 */
+  sellerNickname: string;
+  /** sellerId 是卖家 userId。 */
+  sellerId: string;
+  /** cached 表示是否来自缓存。 */
+  cached: boolean;
+}
+
+/** RewrittenCopyData 是 AI 改写结果。 */
+export interface RewrittenCopyData {
+  /** title 是改写后标题。 */
+  title: string;
+  /** desc 是改写后描述。 */
+  desc: string;
+}
+
+/** CarryImageData 是搬运结果中的资源库图片。 */
+export interface CarryImageData {
+  /** id 是资源库图片 ID。 */
+  id: number;
+  /** filename 是文件名。 */
+  filename: string;
+}
+
+/** CarryResultData 是一键搬运结果。 */
+export interface CarryResultData {
+  /** title 是预填标题（AI 改写后）。 */
+  title: string;
+  /** desc 是预填描述。 */
+  desc: string;
+  /** price 是预填价格。 */
+  price: string;
+  /** images 是资源库图片。 */
+  images: CarryImageData[];
+  /** sameImagesHint 提示图片与竞品相同。 */
+  sameImagesHint: string;
+}
+
+/** fetchCompetitorDetail 读取竞品详情（7 天缓存，未命中实时抓取）。 */
+export const fetchCompetitorDetail = async (itemId: string, options?: RequestControlOptions): Promise<CompetitorDetailData> => {
+  // data 是详情接口的传输 DTO。
+  const data = await runContractRequest(/* detailSignal 控制详情抓取的取消和超时。 */ signal => contractClient.GET('/api/v1/market-intel/items/{item_id}/detail', { params: { path: { item_id: itemId } }, signal }), { timeoutMs: DETAIL_REQUEST_TIMEOUT_MS, ...options });
+  return {
+    itemId: data.item_id, title: data.title, price: data.price, descText: data.desc_text,
+    images: data.images ?? [], sellerNickname: data.seller_nickname, sellerId: data.seller_id, cached: data.cached,
+  };
+};
+
+/** rewriteCompetitorCopy 用 AI 改写竞品文案。 */
+export const rewriteCompetitorCopy = async (itemId: string, options?: RequestControlOptions): Promise<RewrittenCopyData> => {
+  // data 是改写接口的传输 DTO。
+  const data = await runContractRequest(/* rewriteSignal 控制改写请求的取消和超时。 */ signal => contractClient.POST('/api/v1/market-intel/items/{item_id}/rewrite', { params: { path: { item_id: itemId } }, body: {} as never, signal }), { timeoutMs: DETAIL_REQUEST_TIMEOUT_MS, ...options });
+  return { title: data.title, desc: data.desc };
+};
+
+/** analyzeCompetitorSellingPoints 用 AI 分析竞品卖点。 */
+export const analyzeCompetitorSellingPoints = async (itemId: string, options?: RequestControlOptions): Promise<string> => {
+  // data 是分析接口的传输 DTO。
+  const data = await runContractRequest(/* analyzeSignal 控制分析请求的取消和超时。 */ signal => contractClient.POST('/api/v1/market-intel/items/{item_id}/analyze', { params: { path: { item_id: itemId } }, body: {} as never, signal }), { timeoutMs: DETAIL_REQUEST_TIMEOUT_MS, ...options });
+  return data.analysis;
+};
+
+/** carryCompetitorItem 一键搬运（AI 改写 + 图片入库）。 */
+export const carryCompetitorItem = async (itemId: string, options?: RequestControlOptions): Promise<CarryResultData> => {
+  // data 是搬运接口的传输 DTO。
+  const data = await runContractRequest(/* carrySignal 控制搬运请求的取消和超时。 */ signal => contractClient.POST('/api/v1/market-intel/items/{item_id}/carry', { params: { path: { item_id: itemId } }, body: {} as never, signal }), { timeoutMs: DETAIL_REQUEST_TIMEOUT_MS, ...options });
+  return {
+    title: data.title, desc: data.desc, price: data.price,
+    images: (data.images ?? []).map(/* carryImage 归一资源库图片。 */ img => ({ id: img.id, filename: img.filename })),
+    sameImagesHint: data.same_images_hint,
+  };
+};
+
+/** KeywordItemSummary 是快照商品摘要。 */
+export interface KeywordItemSummary {
+  /** itemId 是平台商品标识。 */
+  itemId: string;
+  /** title 是商品标题。 */
+  title: string;
+  /** price 是价格文本。 */
+  price: string;
+  /** wantCountText 是想要人数文本。 */
+  wantCountText: string;
+  /** sellerNickname 是卖家昵称。 */
+  sellerNickname: string;
+}
+
+/** fetchKeywordItems 读取某词最新一天的快照商品列表。 */
+export const fetchKeywordItems = async (keyword: string, options?: RequestControlOptions): Promise<KeywordItemSummary[]> => {
+  // data 是商品列表接口的传输 DTO。
+  const data = await runContractRequest(/* itemsSignal 控制商品列表读取的取消和超时。 */ signal => contractClient.GET('/api/v1/market-intel/keywords/{keyword}/items', { params: { path: { keyword } }, signal }), options);
+  return (data.items ?? []).map(/* keywordItem 归一快照商品。 */ item => ({
+    itemId: item.item_id, title: item.title, price: item.price,
+    wantCountText: item.want_count_text, sellerNickname: item.seller_nickname,
+  }));
+};
