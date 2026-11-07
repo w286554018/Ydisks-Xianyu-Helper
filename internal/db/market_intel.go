@@ -161,8 +161,8 @@ func (m *MarketIntel) CreateKeyword(ctx context.Context, keyword string, enabled
 	if enabled {
 		enabledInt = 1
 	}
-	// result 是写入结果。
-	result, err := m.DB.ExecContext(ctx,
+	// id 与 err 是写入结果；Postgres 走 RETURNING id，SQLite/MySQL 走 LastInsertId。
+	id, err := insertReturningID(ctx, m.DB, m.Dialect,
 		`INSERT INTO market_intel_keywords (keyword, enabled, sort_order) VALUES (?, ?, ?)`,
 		keyword, enabledInt, sortOrder)
 	if err != nil {
@@ -170,11 +170,6 @@ func (m *MarketIntel) CreateKeyword(ctx context.Context, keyword string, enabled
 			return 0, ErrMarketIntelKeywordDuplicate
 		}
 		return 0, fmt.Errorf("新增关注词失败: %w", err)
-	}
-	// id 是新行主键。
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("读取新关注词主键失败: %w", err)
 	}
 	return id, nil
 }
