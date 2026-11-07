@@ -119,6 +119,10 @@ type SearchItem struct {
 	WantCount string `json:"want_count"`
 	// Location 是卖家地区文本。
 	Location string `json:"location"`
+	// SellerNickname 是卖家昵称，来自搜索接口结构化数据；缺失时为空。
+	SellerNickname string `json:"seller_nickname,omitempty"`
+	// PublishTime 是商品发布时间文本；缺失时为空。
+	PublishTime string `json:"publish_time,omitempty"`
 	// DetailURL 是商品详情页地址。
 	DetailURL string `json:"detail_url"`
 }

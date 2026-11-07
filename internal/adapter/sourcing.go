@@ -168,7 +168,9 @@ func (g *SourcingBrowserGateway) SearchItems(ctx context.Context, cookieID, cook
 	for _, item := range items {
 		out = append(out, sourcingapp.SearchItem{
 			ItemID: item.ItemID, Title: item.Title, Price: item.Price,
-			WantCount: item.WantCount, Location: item.Location, DetailURL: item.DetailURL,
+			WantCount: item.WantCount, Location: item.Location,
+			SellerNickname: item.SellerNickname, PublishTime: item.PublishTime,
+			DetailURL: item.DetailURL,
 		})
 	}
 	return out, nil

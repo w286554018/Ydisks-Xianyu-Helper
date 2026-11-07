@@ -79,8 +79,8 @@ func (p *MarketIntelSearchPort) SearchKeyword(ctx context.Context, keyword strin
 	for _, item := range items {
 		out = append(out, marketintel.SearchResultItem{
 			ItemID: item.ItemID, Title: item.Title, Price: item.Price,
-			WantCountText: item.WantCount, SellerNickname: item.Location, PublishTime: "",
-			RawJSON: item.DetailURL,
+			WantCountText: item.WantCount, SellerNickname: item.SellerNickname,
+			PublishTime: item.PublishTime, RawJSON: item.DetailURL,
 		})
 	}
 	return out, nil

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +60,10 @@ type SearchItem struct {
 	WantCount string
 	// Location 是页面展示的卖家所在地区文本，缺失时为空。
 	Location string
+	// SellerNickname 是卖家昵称，来自搜索接口结构化数据；缺失时为空。
+	SellerNickname string
+	// PublishTime 是商品发布时间文本（毫秒时间戳转写）；缺失时为空。
+	PublishTime string
 	// DetailURL 是商品详情页地址。
 	DetailURL string
 }
@@ -69,6 +75,9 @@ type sourcingSearchCard struct {
 	// Text 是卡片可见文本，标题、价格与附加信息按页面顺序拼接。
 	Text string `json:"text"`
 }
+
+// idRegexp 从商品链接提取 id 参数。
+var idRegexp = regexp.MustCompile(`id=([^&]+)`)
 
 // sourcingSearchPayload 是页面抓取脚本的返回结构。
 type sourcingSearchPayload struct {
@@ -146,10 +155,12 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 	}
 	defer release()
 
-	// retMu 保护 rets，因为响应回调在 Playwright 内部协程执行。
+	// retMu 保护 rets 与 apiItems，因为响应回调在 Playwright 内部协程执行。
 	var retMu sync.Mutex
 	// rets 收集搜索接口返回的状态文本，只用于风控与会话归类。
 	var rets []string
+	// apiItems 收集搜索接口返回的结构化商品（含卖家昵称与发布时间）。
+	var apiItems []SearchItem
 	page.OnResponse(func(response playwright.Response) {
 		if !strings.Contains(response.URL(), sourcingSearchAPIMarker) {
 			return
@@ -159,9 +170,35 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 		if bodyErr != nil {
 			return
 		}
-		// envelope 只解析 ret 字段，避免在内存中长期持有整段商品数据。
+		// envelope 解析 ret 与 resultList；resultList 是页面自发搜索接口的结构化商品列表。
 		var envelope struct {
-			Ret []string `json:"ret"`
+			Ret  []string `json:"ret"`
+			Data struct {
+				ResultList []struct {
+					Data struct {
+						Item struct {
+							Main struct {
+								ExContent struct {
+									ItemID string `json:"itemId"`
+									Title  string `json:"title"`
+									Price  []struct {
+										Text string `json:"text"`
+									} `json:"price"`
+									UserNickName string `json:"userNickName"`
+									Area         string `json:"area"`
+								} `json:"exContent"`
+								ClickParam struct {
+									Args struct {
+										PublishTime string `json:"publishTime"`
+										WantNum     string `json:"wantNum"`
+									} `json:"args"`
+								} `json:"clickParam"`
+								TargetURL string `json:"targetUrl"`
+							} `json:"main"`
+						} `json:"item"`
+					} `json:"data"`
+				} `json:"resultList"`
+			} `json:"data"`
 		}
 		// jsonErr 表示搜索接口正文不是 JSON（例如被重定向到登录页），此时忽略该响应。
 		if jsonErr := json.Unmarshal(body, &envelope); jsonErr != nil {
@@ -169,6 +206,45 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 		}
 		retMu.Lock()
 		rets = append(rets, envelope.Ret...)
+		// entry 遍历接口返回的商品列表，转换为结构化摘要。
+		for _, entry := range envelope.Data.ResultList {
+			// main 是商品主信息。
+			main := entry.Data.Item.Main
+			// priceText 拼接分段价格文本。
+			var priceText strings.Builder
+			// part 是价格分段。
+			for _, part := range main.ExContent.Price {
+				priceText.WriteString(part.Text)
+			}
+			// publishTimeText 是毫秒时间戳转写的发布时间。
+			publishTimeText := ""
+			// pubTs 是发布时间毫秒值。
+			if pubTs, convErr := strconv.ParseInt(main.ClickParam.Args.PublishTime, 10, 64); convErr == nil && pubTs > 0 {
+				publishTimeText = time.UnixMilli(pubTs).In(time.FixedZone("CST", 8*3600)).Format("2006-01-02 15:04")
+			}
+			// itemID 兜底从链接提取。
+			itemID := main.ExContent.ItemID
+			// idMatch 从 targetUrl 提取商品 ID。
+			if itemID == "" {
+				// match 是链接中的 id 参数。
+				if match := idRegexp.FindStringSubmatch(main.TargetURL); len(match) > 1 {
+					itemID = match[1]
+				}
+			}
+			if itemID == "" {
+				continue
+			}
+			apiItems = append(apiItems, SearchItem{
+				ItemID:         itemID,
+				Title:          strings.TrimSpace(main.ExContent.Title),
+				Price:          strings.TrimSpace(priceText.String()),
+				WantCount:      main.ClickParam.Args.WantNum,
+				Location:       main.ExContent.Area,
+				SellerNickname: main.ExContent.UserNickName,
+				PublishTime:    publishTimeText,
+				DetailURL:      "https://www.goofish.com/item?id=" + itemID,
+			})
+		}
 		retMu.Unlock()
 	})
 
@@ -183,6 +259,7 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 	}
 
 	// items 保存本次抓取到的商品摘要，轮询期间逐步填充。
+	// 优先使用搜索接口的结构化数据（含卖家昵称）；DOM 提取仅作兜底。
 	var items []SearchItem
 	// attempt 是当前轮询序号，达到上限即停止等待。
 	for attempt := 0; attempt < sourcingPollAttempts; attempt++ {
@@ -199,6 +276,16 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 		if retErr := sourcingRetError(captured); retErr != nil {
 			return nil, retErr
 		}
+		// 优先采用搜索接口的结构化数据（含卖家昵称与发布时间）。
+		retMu.Lock()
+		// apiSnapshot 是接口结构化数据的快照副本。
+		apiSnapshot := append([]SearchItem(nil), apiItems...)
+		retMu.Unlock()
+		if len(apiSnapshot) > 0 {
+			items = apiSnapshot
+			break
+		}
+		// 接口数据未就绪时用 DOM 提取兜底。
 		items = extractSearchItems(page)
 		if len(items) > 0 {
 			break
@@ -210,10 +297,42 @@ func (m *Manager) SearchItems(ctx context.Context, cookieID, cookieStr, keyword 
 	retMu.Lock()
 	// finalRets 是结束等待时的返回码快照，用于最终风控与会话判断。
 	finalRets := append([]string(nil), rets...)
+	// finalAPIItems 是结束时的接口结构化数据快照。
+	finalAPIItems := append([]SearchItem(nil), apiItems...)
 	retMu.Unlock()
 	// retErr 是最终返回码归类出的领域错误，优先于"无结果"返回。
 	if retErr := sourcingRetError(finalRets); retErr != nil {
 		return nil, retErr
+	}
+	// 接口结构化数据优先；DOM 兜底数据补齐接口缺失的卖家信息（按商品 ID 对齐）。
+	if len(finalAPIItems) > 0 {
+		// domIndex 是 DOM 提取结果的商品 ID 索引。
+		domIndex := make(map[string]SearchItem, len(items))
+		// domItem 遍历建立索引。
+		for _, domItem := range items {
+			domIndex[domItem.ItemID] = domItem
+		}
+		// merged 是合并后的最终集合。
+		merged := make([]SearchItem, 0, len(finalAPIItems))
+		// apiItem 遍历接口数据，缺省字段用 DOM 值补齐。
+		for _, apiItem := range finalAPIItems {
+			if apiItem.Title == "" || apiItem.Price == "" || apiItem.WantCount == "" {
+				// domMatch 是同商品的 DOM 提取结果。
+				if domMatch, exists := domIndex[apiItem.ItemID]; exists {
+					if apiItem.Title == "" {
+						apiItem.Title = domMatch.Title
+					}
+					if apiItem.Price == "" {
+						apiItem.Price = domMatch.Price
+					}
+					if apiItem.WantCount == "" {
+						apiItem.WantCount = domMatch.WantCount
+					}
+				}
+			}
+			merged = append(merged, apiItem)
+		}
+		items = merged
 	}
 	if len(items) == 0 {
 		return nil, ErrSourcingNoResult
