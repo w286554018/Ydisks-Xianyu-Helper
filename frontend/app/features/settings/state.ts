@@ -23,6 +23,43 @@ export const validateCredentials = (credentials: CredentialsForm): string => {
   return '';
 };
 
+/** AccountOption 是市场情报抓取账号下拉的可选项。 */
+export type AccountOption = {
+  /** id 是账号标识（cookie_id），保存到系统设置。 */
+  id: string;
+  /** label 是下拉展示文本。 */
+  label: string;
+};
+
+/** AccountOptionRow 是账号摘要接口的最小行模型。 */
+export type AccountOptionRow = {
+  /** id 是账号标识。 */
+  id?: unknown;
+  /** nickname 是账号昵称。 */
+  nickname?: unknown;
+  /** remark 是账号备注。 */
+  remark?: unknown;
+};
+
+/** accountOptionLabel 生成账号下拉展示文本：昵称（账号 ID），有备注时追加。 */
+export const accountOptionLabel = (id: string, nickname: string, remark: string): string => {
+  // name 是展示用账号名称，缺失时给出可辨识占位。
+  const name = nickname.trim() || '未命名账号';
+  // base 是昵称与账号标识的组合文本。
+  const base = `${name}（${id}）`;
+  // note 是去空白后的备注。
+  const note = remark.trim();
+  return note ? `${base} · ${note}` : base;
+};
+
+/** buildAccountOptions 把账号摘要行归一为下拉选项，过滤缺少标识的记录。 */
+export const buildAccountOptions = (rows: AccountOptionRow[]): AccountOption[] => rows
+  .filter(/* row 是一条账号摘要，缺少标识的记录无法用于抓取。 */ row => typeof row.id === 'string' && row.id !== '')
+  .map(/* row 是一条有效账号摘要。 */ row => ({
+    id: row.id as string,
+    label: accountOptionLabel(row.id as string, String(row.nickname ?? ''), String(row.remark ?? '')),
+  }));
+
 /** 判断设置请求响应是否仍可写入当前页面。 */
 export const isCurrentSettingsRequest = (currentSequence: number, requestSequence: number, signal: AbortSignal): boolean => (
   currentSequence === requestSequence && !signal.aborted

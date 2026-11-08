@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	marketintel "xianyu-go/internal/application/marketintel"
@@ -54,7 +55,7 @@ func TestResolveCookieID(t *testing.T) {
 		t.Fatal("无账号目录且未配置账号应报错")
 	}
 	// 有账号目录时自动选择第一个账号。
-	auto := NewMarketIntelSearchPort(nil, nil, store.Admin, 1, "  ")
+	auto := NewMarketIntelSearchPort(nil, nil, store, 1, "  ")
 	// err、got 是本次调用的返回错误；本次调用的实际返回值。
 	if got, err := auto.resolveCookieID(ctx); err != nil || got != "scan-account" {
 		t.Fatalf("自动选择账号不符: %q err=%v", got, err)
@@ -66,6 +67,69 @@ func TestResolveCookieID(t *testing.T) {
 	// err 是本次调用的返回错误。
 	if _, err := auto.resolveCookieID(ctx); err == nil {
 		t.Fatal("账号目录读取失败应报错")
+	}
+}
+
+// TestResolveCookieIDFromSetting 验证系统设置指定的抓取账号优先于自动选择，并校验账号有效性。
+func TestResolveCookieIDFromSetting(t *testing.T) {
+	// store、userID 是含一个账号的测试数据库与账号归属用户。
+	store, userID := newMarketIntelAdapterStore(t)
+	// ctx 是本测试共用的非取消上下文。
+	ctx := context.Background()
+	// 再写入一个账号，并显式固定两个账号的创建时间，避免同秒写入导致排序不确定。
+	if saveErr := store.Cookies.Save(ctx, "newer-account", "unb=2", userID); saveErr != nil {
+		t.Fatalf("写入第二个账号失败: %v", saveErr)
+	}
+	// stampErr 是固定旧账号创建时间返回的错误。
+	if _, stampErr := store.DB.ExecContext(ctx, `UPDATE cookies SET created_at='2026-10-01 00:00:00' WHERE id='scan-account'`); stampErr != nil {
+		t.Fatalf("固定旧账号创建时间失败: %v", stampErr)
+	}
+	// stampErr 是固定新账号创建时间返回的错误。
+	if _, stampErr := store.DB.ExecContext(ctx, `UPDATE cookies SET created_at='2026-10-02 00:00:00' WHERE id='newer-account'`); stampErr != nil {
+		t.Fatalf("固定新账号创建时间失败: %v", stampErr)
+	}
+	// port 是未显式指定账号的抓取端口。
+	port := NewMarketIntelSearchPort(nil, nil, store, userID, "")
+	// 未配置设置时回落为账号目录第一个（创建时间最新）。
+	if got, err := port.resolveCookieID(ctx); err != nil || got != "newer-account" {
+		t.Fatalf("未配置设置应自动选择最新账号: %q err=%v", got, err)
+	}
+	// 配置为较早创建的账号后必须优先使用它。
+	if setErr := store.Settings.Set(ctx, SettingMarketIntelScanAccount, "scan-account"); setErr != nil {
+		t.Fatalf("写入抓取账号设置失败: %v", setErr)
+	}
+	// got、err 是本次调用的实际返回值与返回错误。
+	if got, err := port.resolveCookieID(ctx); err != nil || got != "scan-account" {
+		t.Fatalf("设置指定的账号应优先: %q err=%v", got, err)
+	}
+	// 配置的账号已不存在时必须明确报错，不能静默换账号。
+	if setErr := store.Settings.Set(ctx, SettingMarketIntelScanAccount, "deleted-account"); setErr != nil {
+		t.Fatalf("写入失效账号设置失败: %v", setErr)
+	}
+	// missingErr 是配置账号不存在时的解析错误。
+	_, missingErr := port.resolveCookieID(ctx)
+	if missingErr == nil || !strings.Contains(missingErr.Error(), "不存在") {
+		t.Fatalf("配置账号不存在应报错: %v", missingErr)
+	}
+	// 清空设置后应回到自动选择。
+	if setErr := store.Settings.Set(ctx, SettingMarketIntelScanAccount, ""); setErr != nil {
+		t.Fatalf("清空抓取账号设置失败: %v", setErr)
+	}
+	// got、err 是本次调用的实际返回值与返回错误。
+	if got, err := port.resolveCookieID(ctx); err != nil || got != "newer-account" {
+		t.Fatalf("清空设置应回到自动选择: %q err=%v", got, err)
+	}
+	// 数据库不可用时读取设置必须报错，不能静默回落到自动选择。
+	if setErr := store.Settings.Set(ctx, SettingMarketIntelScanAccount, "scan-account"); setErr != nil {
+		t.Fatalf("重新写入抓取账号设置失败: %v", setErr)
+	}
+	// closeErr 是关闭测试数据库时返回的错误。
+	if closeErr := store.DB.Close(); closeErr != nil {
+		t.Fatalf("关闭测试数据库失败: %v", closeErr)
+	}
+	// closedErr 是数据库不可用时的解析错误。
+	if _, closedErr := port.resolveCookieID(ctx); closedErr == nil {
+		t.Fatal("数据库不可用时读取设置应报错")
 	}
 }
 
@@ -83,7 +147,7 @@ func TestMarketIntelSearchPortFetchDetailErrors(t *testing.T) {
 		t.Fatal("无扫描账号应报错")
 	}
 	// 账号存在但归属用户不匹配时，凭证读取必须拒绝且不泄露登录态。
-	foreign := NewMarketIntelSearchPort(nil, NewSourcingCredentialReader(store), store.Admin, userID+999, "scan-account")
+	foreign := NewMarketIntelSearchPort(nil, NewSourcingCredentialReader(store), store, userID+999, "scan-account")
 	// err 是本次调用的返回错误。
 	if _, err := foreign.FetchCompetitorDetail(ctx, "item-1"); err == nil {
 		t.Fatal("账号不属于当前用户时应报错")

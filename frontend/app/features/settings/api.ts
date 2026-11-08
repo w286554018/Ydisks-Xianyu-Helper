@@ -1,4 +1,6 @@
 import type { OperationResponse,SystemSettings } from './models';
+import { buildAccountOptions,type AccountOption,type AccountOptionRow } from './state';
+import { collectionFrom } from '../../../shared/http/contract';
 import { contractClient, runContractRequest } from '../../../shared/api-contract/client';
 import { normalizeSystemSettingsUpdate,SENSITIVE_SYSTEM_SETTING_KEYS } from '../../../shared/api-contract/settings';
 import { type RequestControlOptions } from '../../../shared/http/client';
@@ -41,6 +43,13 @@ const normalizeSettings = (settings: Record<string, unknown>): SystemSettings =>
     result.outbound_http_public_only = result.outbound_http_public_only === true || result.outbound_http_public_only === 'true';
   }
   return result as SystemSettings;
+};
+
+/** fetchAccountOptions 读取当前用户名下账号，用作市场情报抓取账号选择。 */
+export const fetchAccountOptions = async (options?: RequestControlOptions): Promise<AccountOption[]> => {
+  // response 是账号摘要接口的原始响应，兼容数组与历史包装。
+  const response = await runContractRequest(/* signal 是本次账号列表读取的取消与超时信号。 */ signal => contractClient.GET('/api/v1/accounts/details', { signal }), options);
+  return buildAccountOptions(collectionFrom<AccountOptionRow>(response, ['data', 'accounts', 'details']));
 };
 
 /** 修改当前管理员的密码。 */

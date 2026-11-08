@@ -92,10 +92,11 @@ test('updateSystemSettings separates sensitive values into explicit commands', /
 });
 
 test('normalizeSystemSettingsUpdate separates every sensitive system setting', /* 当前回调验证共享归一器不会遗漏任一敏感系统设置。 */ () => {
-  // payload 是混合普通值和四类敏感值后的系统设置命令。
+  // payload 是混合普通值和全部敏感值后的系统设置命令。
   const payload = normalizeSystemSettingsUpdate({
     theme_color: 'blue',
     ai_api_key: 'test-ai-key',
+    market_intel_api_key: 'test-market-intel-key',
     smtp_password: 'test-smtp-password',
     qq_reply_secret_key: 'test-qq-secret',
     'captcha.remote_secret_key': 'test-captcha-secret',
@@ -103,6 +104,7 @@ test('normalizeSystemSettingsUpdate separates every sensitive system setting', /
   expect(payload.values).toEqual({ theme_color: 'blue' });
   expect(payload.secrets).toEqual({
     ai_api_key: { action: 'replace', value: 'test-ai-key' },
+    market_intel_api_key: { action: 'replace', value: 'test-market-intel-key' },
     smtp_password: { action: 'replace', value: 'test-smtp-password' },
     qq_reply_secret_key: { action: 'replace', value: 'test-qq-secret' },
     'captcha.remote_secret_key': { action: 'replace', value: 'test-captcha-secret' },

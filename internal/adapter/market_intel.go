@@ -15,6 +15,9 @@ import (
 	"xianyu-go/internal/db"
 )
 
+// SettingMarketIntelScanAccount 是市场情报抓取账号设置键；留空表示自动选择最新账号。
+const SettingMarketIntelScanAccount = "market_intel_scan_account"
+
 // MarketIntelSearchPort 把浏览器选品搜索包装成市场情报的 SearchPort。
 // 复用既有 sourcing 通道（单次 1 请求、30 条上限、风控即停），不新增平台请求形态。
 type MarketIntelSearchPort struct {
@@ -22,31 +25,40 @@ type MarketIntelSearchPort struct {
 	gateway *SourcingBrowserGateway
 	// credentials 提供账号 cookie 的解密读取。
 	credentials *SourcingCredentialReader
-	// admin 是管理员账号目录，用于自动选择扫描账号。
-	admin *db.AdminQueries
+	// store 提供账号目录与系统设置读取（抓取账号可在系统设置中指定）。
+	store *db.Store
 	// userID 是执行扫描的账号归属用户（系统任务使用管理员）。
 	userID int64
-	// cookieID 是显式指定的扫描账号；为空时自动选择第一个账号。
+	// cookieID 是构造期显式指定的扫描账号；为空时按系统设置或账号目录解析。
 	cookieID string
 }
 
-// NewMarketIntelSearchPort 构造市场情报搜索端口；cookieID 为空时每次搜索自动选第一个账号。
-func NewMarketIntelSearchPort(gateway *SourcingBrowserGateway, credentials *SourcingCredentialReader, admin *db.AdminQueries, userID int64, cookieID string) *MarketIntelSearchPort {
-	return &MarketIntelSearchPort{gateway: gateway, credentials: credentials, admin: admin, userID: userID, cookieID: cookieID}
+// NewMarketIntelSearchPort 构造市场情报搜索端口；cookieID 为空时按系统设置或账号目录解析抓取账号。
+func NewMarketIntelSearchPort(gateway *SourcingBrowserGateway, credentials *SourcingCredentialReader, store *db.Store, userID int64, cookieID string) *MarketIntelSearchPort {
+	return &MarketIntelSearchPort{gateway: gateway, credentials: credentials, store: store, userID: userID, cookieID: cookieID}
 }
 
-// resolveCookieID 返回本次搜索使用的账号标识：显式配置优先，否则自动选第一个账号。
+// resolveCookieID 返回本次抓取使用的账号标识：构造期显式指定 > 系统设置指定 > 账号目录第一个。
+// 手动扫描、详情抓取与每日调度共用该解析，保证自动与手动行为一致。
 func (p *MarketIntelSearchPort) resolveCookieID(ctx context.Context) (string, error) {
 	// trimmed 是去空白后的显式账号。
 	trimmed := strings.TrimSpace(p.cookieID)
 	if trimmed != "" {
 		return trimmed, nil
 	}
-	if p.admin == nil {
+	// configured、configuredErr 是系统设置中指定的抓取账号与读取错误。
+	configured, configuredErr := p.configuredCookieID(ctx)
+	if configuredErr != nil {
+		return "", configuredErr
+	}
+	if configured != "" {
+		return configured, nil
+	}
+	if p.store == nil || p.store.Admin == nil {
 		return "", errors.New("市场情报扫描账号未配置且无账号目录")
 	}
 	// cookies 是全部账号摘要。
-	cookies, err := p.admin.ListCookies(ctx)
+	cookies, err := p.store.Admin.ListCookies(ctx)
 	if err != nil {
 		return "", fmt.Errorf("读取账号目录失败: %w", err)
 	}
@@ -54,6 +66,36 @@ func (p *MarketIntelSearchPort) resolveCookieID(ctx context.Context) (string, er
 		return "", errors.New("没有可用的闲鱼账号，请先在账号管理添加并登录")
 	}
 	return cookies[0].ID, nil
+}
+
+// configuredCookieID 读取系统设置里指定的抓取账号并校验其仍然存在；未配置时返回空串表示回落自动选择。
+// 配置的账号已被删除时明确报错，避免静默换账号导致排查困难。
+func (p *MarketIntelSearchPort) configuredCookieID(ctx context.Context) (string, error) {
+	if p.store == nil || p.store.Settings == nil || p.store.Admin == nil {
+		return "", nil
+	}
+	// raw、readErr 是设置值与读取错误。
+	raw, readErr := p.store.Settings.Get(ctx, SettingMarketIntelScanAccount)
+	if readErr != nil {
+		return "", fmt.Errorf("读取市场情报抓取账号设置失败: %w", readErr)
+	}
+	// want 是去空白后的配置账号；空值表示自动选择。
+	want := strings.TrimSpace(raw)
+	if want == "" {
+		return "", nil
+	}
+	// cookies、err 是账号目录与读取错误。
+	cookies, err := p.store.Admin.ListCookies(ctx)
+	if err != nil {
+		return "", fmt.Errorf("读取账号目录失败: %w", err)
+	}
+	// cookie 是当前遍历到的账号摘要。
+	for _, cookie := range cookies {
+		if cookie.ID == want {
+			return want, nil
+		}
+	}
+	return "", fmt.Errorf("系统设置指定的市场情报抓取账号不存在: %s", want)
 }
 
 // SearchKeyword 以扫描账号的登录态执行单词搜索；错误语义与 sourcing 一致。

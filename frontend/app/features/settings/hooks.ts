@@ -1,9 +1,10 @@
 import type React from 'react';
 import { useCallback,useEffect,useRef,useState } from 'react';
 import type { SystemSettings } from './api';
-import { fetchAIModels,getSystemSettings,testAIConnection,updateLoginCredentials,updateSystemSettings,verifySession } from './api';
+import { fetchAIModels,fetchAccountOptions,getSystemSettings,testAIConnection,updateLoginCredentials,updateSystemSettings,verifySession } from './api';
 import { DEFAULT_AI_API_URL } from './constants';
 import { buildPersistableSettings,createCredentials,createCredentialsMessage,isCurrentAIConnectionTest,isCurrentSettingsRequest,isSettingsAbortError,settingsErrorMessage,validateCredentials } from './state';
+import type { AccountOption } from './state';
 import type { ConnectionTestMessage,CredentialsForm,CredentialsMessage,SettingsFeatureState,SettingsRequestStatus } from './types';
 
 /** Settings feature 的 Hook 返回值。 */
@@ -26,6 +27,8 @@ export type UseSettingsResult = SettingsFeatureState & {
   setModelDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** 更新敏感字段显示状态。 */
   setShowApiKey: React.Dispatch<React.SetStateAction<boolean>>;
+  /** 更新市场情报模型密钥显示状态。 */
+  setShowMarketIntelKey: React.Dispatch<React.SetStateAction<boolean>>;
   /** 更新远程秘钥显示状态。 */
   setShowCaptchaSecret: React.Dispatch<React.SetStateAction<boolean>>;
   /** 更新当前密码显示状态。 */
@@ -50,6 +53,8 @@ export const useSettings = (): UseSettingsResult => {
   const [saving, setSaving] = useState(false);
   // saveError 保存系统配置保存失败信息。
   const [saveError, setSaveError] = useState('');
+  // accountOptions 保存市场情报抓取账号下拉候选项。
+  const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
   // aiModels 保存远端模型发现结果。
   const [aiModels, setAiModels] = useState<string[]>([]);
   // modelsLoading 表示模型发现请求是否进行中。
@@ -60,6 +65,8 @@ export const useSettings = (): UseSettingsResult => {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   // showApiKey 控制 AI API Key 是否明文显示。
   const [showApiKey, setShowApiKey] = useState(false);
+  // showMarketIntelKey 控制市场情报模型密钥是否明文显示。
+  const [showMarketIntelKey, setShowMarketIntelKey] = useState(false);
   // showCaptchaSecret 控制远程验证秘钥是否明文显示。
   const [showCaptchaSecret, setShowCaptchaSecret] = useState(false);
   // showCurrentPassword 控制当前密码是否明文显示。
@@ -221,9 +228,12 @@ export const useSettings = (): UseSettingsResult => {
     Promise.all([
       getSystemSettings({ signal: controller.signal }),
       verifySession({ signal: controller.signal }),
-    ]).then(/* 当前回调处理用户交互或异步状态变化。 */ ([data, session]) => {
+      // 账号候选读取失败只降级为「仅自动选择」，不阻断系统设置加载。
+      fetchAccountOptions({ signal: controller.signal }).catch(/* 当前回调忽略账号候选取失败。 */ () => [] as AccountOption[]),
+    ]).then(/* 当前回调处理用户交互或异步状态变化。 */ ([data, session, accounts]) => {
       if (!isCurrentSettingsRequest(requestSequence.current, sequence, controller.signal)) return;
       setSettings(data);
+      setAccountOptions(accounts);
       if (session.username) setCredentials(/* 当前回调处理用户交互或异步状态变化。 */ previous => ({ ...previous, new_username: session.username || '' }));
       void loadAIModels(data, false);
       setRequestStatus('success');
@@ -327,10 +337,11 @@ export const useSettings = (): UseSettingsResult => {
 
   return {
     settings, loading, loadError, saving, saveError, aiModels, modelsLoading, modelError, modelDropdownOpen,
-    showApiKey, showCaptchaSecret, showCurrentPassword, showNewPassword, credentialsSaving, credentialsMessage,
+    showApiKey, showMarketIntelKey, showCaptchaSecret, showCurrentPassword, showNewPassword, credentialsSaving, credentialsMessage,
     credentials, requestStatus, modelPickerRef, loadSettings, loadAIModels: /* source 是可选设置快照；openAfterLoad 指定成功后是否展开下拉列表。 */ (source, openAfterLoad) => void loadAIModels(source, openAfterLoad),
+    accountOptions,
     testConnection, connectionTestLoading, connectionTestMessage, handleSave, handleCredentialsSave,
-    setSettings, setModelDropdownOpen, setShowApiKey, setShowCaptchaSecret,
+    setSettings, setModelDropdownOpen, setShowApiKey, setShowMarketIntelKey, setShowCaptchaSecret,
     setShowCurrentPassword, setShowNewPassword, setCredentials, setCredentialsMessage,
   };
 };

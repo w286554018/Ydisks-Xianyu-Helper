@@ -35,6 +35,16 @@ export interface SystemSettings {
   'captcha.remote_secret_key_configured'?: boolean;
   /** 远程验证码服务 Cookie 配置。 */
   'captcha.remote_pass_cookies'?: boolean | string;
+  /** 市场情报抓取账号；空值表示自动选择账号目录里创建时间最新的账号。 */
+  market_intel_scan_account?: string;
+  /** 市场情报模型 API 地址。 */
+  market_intel_api_url?: string;
+  /** 市场情报模型密钥。 */
+  market_intel_api_key?: string;
+  /** 市场情报模型密钥是否已在服务端配置。 */
+  market_intel_api_key_configured?: boolean;
+  /** 市场情报模型名称。 */
+  market_intel_model?: string;
   /** 兼容未来配置键的扩展字段。 */
   /** 未知设置键只能承载服务端声明的标量值，敏感值不进入该 UI 模型。 */
   [key: string]: string | number | boolean | undefined;

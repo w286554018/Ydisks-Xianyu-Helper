@@ -22,10 +22,10 @@ const Settings: React.FC = () => {
   // featureState 是 Settings Hook 提供的状态与动作集合。
   const {
     settings, loading, loadError, saving, saveError, aiModels, modelsLoading, modelError, modelDropdownOpen,
-    showApiKey, showCaptchaSecret, showCurrentPassword, showNewPassword, credentialsSaving, credentialsMessage,
+    accountOptions, showApiKey, showMarketIntelKey, showCaptchaSecret, showCurrentPassword, showNewPassword, credentialsSaving, credentialsMessage,
     credentials, modelPickerRef, loadSettings, loadAIModels, testConnection, connectionTestLoading,
     connectionTestMessage, handleSave, handleCredentialsSave,
-    setSettings, setModelDropdownOpen, setShowApiKey, setShowCaptchaSecret, setShowCurrentPassword,
+    setSettings, setModelDropdownOpen, setShowApiKey, setShowMarketIntelKey, setShowCaptchaSecret, setShowCurrentPassword,
     setShowNewPassword, setCredentials,
   } = useSettings();
   // notificationSound 保存当前浏览器的新消息提示音偏好，仅存于本机浏览器，不随系统配置保存。
@@ -278,6 +278,78 @@ const Settings: React.FC = () => {
 
         {/* Right Column */}
         <div className="space-y-8">
+          {/* Market Intel Configuration */}
+          <section className="space-y-4">
+            <h3 className="text-lg font-extrabold text-gray-800 flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-indigo-500 text-white">
+                <Database className="w-4 h-4" />
+              </div>
+              市场情报
+            </h3>
+
+            <div className="ios-card rounded-xl p-6 bg-white space-y-6">
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-gray-800">抓取账号</label>
+                <select
+                  value={settings.market_intel_scan_account || ''}
+                  onChange={/* 当前回调写入市场情报抓取账号。 */ event => setSettings({ ...settings, market_intel_scan_account: event.target.value })}
+                  className="w-full ios-input px-4 py-3 rounded-xl text-sm"
+                >
+                  <option value="">自动（账号目录里创建时间最新的账号）</option>
+                  {accountOptions.map(/* 当前回调渲染单个账号候选项。 */ option => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500">竞品详情、手动扫描与每日 8 点自动扫描都使用该账号；遇到平台风控会立即停止，不会重试。</p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-gray-800">模型 API 地址</label>
+                <input
+                  type="text"
+                  value={settings.market_intel_api_url || ''}
+                  onChange={/* 当前回调写入市场情报模型地址。 */ event => setSettings({ ...settings, market_intel_api_url: event.target.value })}
+                  className="w-full ios-input px-4 py-3 rounded-xl text-sm"
+                  placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
+                />
+                <p className="text-xs text-gray-500">留空使用默认通义千问兼容端点；仅用于市场情报的 AI 改写与卖点分析，与上方 AI 智能回复相互独立。</p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-gray-800">模型 API Key</label>
+                <div className="relative">
+                  <input
+                    type={showMarketIntelKey ? 'text' : 'password'}
+                    value={settings.market_intel_api_key || ''}
+                    onChange={/* 当前回调写入市场情报模型密钥。 */ event => setSettings({ ...settings, market_intel_api_key: event.target.value })}
+                    className="w-full ios-input px-4 py-3 pr-12 rounded-xl font-mono text-sm"
+                    autoComplete="off"
+                    placeholder={settings.market_intel_api_key_configured ? '已配置，如需替换请输入新密钥' : 'sk-...'}
+                  />
+                  <button
+                    type="button"
+                    onClick={/* 当前回调切换市场情报密钥明文显示。 */ () => setShowMarketIntelKey(!showMarketIntelKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showMarketIntelKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">未配置时竞品详情仍可查看，但 AI 改写与卖点分析会返回未配置提示。</p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-gray-800">模型名称</label>
+                <input
+                  type="text"
+                  value={settings.market_intel_model || ''}
+                  onChange={/* 当前回调写入市场情报模型名称。 */ event => setSettings({ ...settings, market_intel_model: event.target.value })}
+                  className="w-full ios-input px-4 py-3 rounded-xl text-sm"
+                  placeholder="qwen-plus"
+                />
+              </div>
+            </div>
+          </section>
+
           <section className="space-y-4">
             <h3 className="text-lg font-extrabold text-gray-800 flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-amber-500 text-white">

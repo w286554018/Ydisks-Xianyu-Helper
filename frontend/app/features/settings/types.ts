@@ -1,4 +1,5 @@
 import type { SystemSettings } from './api';
+import type { AccountOption } from './state';
 
 /** 登录凭据编辑表单。 */
 export type CredentialsForm = {
@@ -45,6 +46,8 @@ export type SettingsFeatureState = {
   saveError: string;
   /** 可选 AI 模型列表。 */
   aiModels: string[];
+  /** 市场情报抓取账号下拉候选项。 */
+  accountOptions: AccountOption[];
   /** AI 模型列表加载状态。 */
   modelsLoading: boolean;
   /** AI 模型列表错误。 */
@@ -57,6 +60,8 @@ export type SettingsFeatureState = {
   connectionTestMessage: ConnectionTestMessage;
   /** API Key 是否明文显示。 */
   showApiKey: boolean;
+  /** 市场情报模型密钥是否明文显示。 */
+  showMarketIntelKey: boolean;
   /** 远程验证秘钥是否明文显示。 */
   showCaptchaSecret: boolean;
   /** 当前密码是否明文显示。 */

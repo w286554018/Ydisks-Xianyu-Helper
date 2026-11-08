@@ -25,6 +25,7 @@ export type SystemSettingsUpdate = {
 /** SENSITIVE_SYSTEM_SETTING_KEYS 标识不得写入普通 values 的秘密键。 */
 export const SENSITIVE_SYSTEM_SETTING_KEYS = new Set([
   'ai_api_key',
+  'market_intel_api_key',
   'smtp_password',
   'qq_reply_secret_key',
   'captcha.remote_secret_key',

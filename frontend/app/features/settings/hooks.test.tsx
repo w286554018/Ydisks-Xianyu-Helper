@@ -2,10 +2,11 @@
 import { act,renderHook,waitFor } from '@testing-library/react';
 import { beforeEach,describe,expect,test,vi } from 'vitest';
 import type { AIConnectionTestResult,OperationResponse,SystemSettings } from './api';
-import { fetchAIModels,getSystemSettings,testAIConnection,updateLoginCredentials,updateSystemSettings,verifySession } from './api';
+import { fetchAccountOptions,fetchAIModels,getSystemSettings,testAIConnection,updateLoginCredentials,updateSystemSettings,verifySession } from './api';
 import { useSettings } from './hooks';
 
 vi.mock('./api', /* settingsApiMockFactory 提供设置 Hook 的确定性 API 替身。 */ () => ({
+  fetchAccountOptions: vi.fn(),
   fetchAIModels: vi.fn(),
   getSystemSettings: vi.fn(),
   testAIConnection: vi.fn(),
@@ -14,6 +15,8 @@ vi.mock('./api', /* settingsApiMockFactory 提供设置 Hook 的确定性 API �
   verifySession: vi.fn(),
 }));
 
+// fetchAccountOptionsMock 是市场情报抓取账号候选请求的可控替身。
+const fetchAccountOptionsMock = vi.mocked(fetchAccountOptions);
 // fetchModelsMock 是模型发现请求的可控替身。
 const fetchModelsMock = vi.mocked(fetchAIModels);
 // getSettingsMock 是系统设置读取请求的可控替身。
@@ -38,6 +41,7 @@ describe('useSettings', /* 当前回调处理系统设置、模型和凭据请�
   beforeEach(/* 当前回调重置设置 API 替身和浏览器副作用。 */ () => {
     vi.clearAllMocks();
     getSettingsMock.mockResolvedValue(settingsFixture);
+    fetchAccountOptionsMock.mockResolvedValue([{ id: 'acc-1', label: '水影莫（acc-1）' }]);
     verifySessionMock.mockResolvedValue({ authenticated: true, username: 'admin' });
     fetchModelsMock.mockResolvedValue(['model-a', 'model-b']);
     testConnectionMock.mockResolvedValue({ success: true, model: 'model-a', latency_ms: 42, reply: '你好' });
@@ -68,6 +72,23 @@ describe('useSettings', /* 当前回调处理系统设置、模型和凭据请�
     expect(updateSettingsMock).toHaveBeenCalledWith(expect.objectContaining({ ai_api_url: settingsFixture.ai_api_url }), expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(window.alert).toHaveBeenCalledWith('系统配置已保存');
   });
+
+  test('加载设置同时读取抓取账号候选，失败时降级为空列表',
+    /* 当前回调验证账号候选不阻断系统设置加载，并在失败时只降级为自动选择。 */
+    async () => {
+      // result 是被测 Hook 的渲染结果。
+      const { result } = renderHook(renderSettingsHook);
+      await waitFor(/* 当前回调等待系统设置与账号候选写入。 */ () => expect(result.current.settings).not.toBeNull());
+      expect(result.current.accountOptions).toEqual([{ id: 'acc-1', label: '水影莫（acc-1）' }]);
+
+      // 账号接口失败时必须保留系统设置，仅把候选降级为空列表。
+      fetchAccountOptionsMock.mockRejectedValue(new Error('账号列表读取失败'));
+      act(/* 当前回调重新加载设置。 */ () => result.current.loadSettings());
+      await waitFor(/* 当前回调等待重新加载完成。 */ () => expect(result.current.loading).toBe(false));
+      expect(result.current.settings).toMatchObject({ log_level: 'info' });
+      expect(result.current.accountOptions).toEqual([]);
+      expect(result.current.loadError).toBe('');
+    });
 
   test('模型发现失败时清空列表并展示错误', /* 当前回调验证模型接口错误路径。 */ async () => {
     fetchModelsMock.mockRejectedValue(new Error('模型服务不可用'));
