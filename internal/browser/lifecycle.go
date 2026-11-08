@@ -188,6 +188,8 @@ type Manager struct {
 	captchaGuardMu sync.Mutex
 	// captchaFailedAt 记录每个账号最近一次自动滑块验证失败时间；进程重启后清空，不参与持久化。
 	captchaFailedAt map[string]time.Time
+	// captchaFailedCookieHash 记录失败时所用登录态的摘要，登录态变化时抑制窗口自动失效。
+	captchaFailedCookieHash map[string]string
 
 	// browserFingerprint is observed from the bundled Chromium once during
 	// initialization.  Headless contexts use the same identity with only the

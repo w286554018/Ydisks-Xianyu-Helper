@@ -207,35 +207,50 @@ func TestFindCompetitorDetailPunishURL(t *testing.T) {
 	}
 }
 
-// TestCaptchaRecoverySuppression 验证自动验证失败的抑制窗口：失败后抑制、成功后清除、窗口过期恢复。
+// TestCaptchaRecoverySuppression 验证自动验证失败的抑制窗口：失败后抑制、成功后清除、窗口过期或凭据变化后恢复。
 func TestCaptchaRecoverySuppression(t *testing.T) {
 	// manager 是被测浏览器管理器；仅使用内存抑制状态，不启动浏览器。
 	manager := &Manager{}
-	if manager.captchaRecoverySuppressed("acc-1") {
+	// cookieA 是失败尝试时使用的登录态。
+	cookieA := "unb=1; _m_h5_tk=a"
+	// cookieB 是人工更新后的登录态，用于验证抑制窗口与凭据绑定。
+	cookieB := "unb=1; _m_h5_tk=b; x5sec=passed"
+	// hashA 是 cookieA 的摘要。
+	hashA := captchaCookieHash(cookieA)
+	// hashB 是 cookieB 的摘要。
+	hashB := captchaCookieHash(cookieB)
+	if hashA == hashB || hashA == "" {
+		t.Fatal("不同登录态必须得到不同摘要")
+	}
+	if manager.captchaRecoverySuppressed("acc-1", hashA) {
 		t.Fatal("未失败过的账号不应被抑制")
 	}
-	manager.markCaptchaRecoveryFailure("acc-1")
-	if !manager.captchaRecoverySuppressed("acc-1") {
+	manager.markCaptchaRecoveryFailure("acc-1", cookieA)
+	if !manager.captchaRecoverySuppressed("acc-1", hashA) {
 		t.Fatal("失败后应进入抑制窗口")
 	}
 	// 其它账号不受影响。
-	if manager.captchaRecoverySuppressed("acc-2") {
+	if manager.captchaRecoverySuppressed("acc-2", hashA) {
 		t.Fatal("抑制窗口必须按账号隔离")
 	}
+	// 登录态被外部更新（人工粘贴验证后的 Cookie）时必须重新允许尝试。
+	if manager.captchaRecoverySuppressed("acc-1", hashB) {
+		t.Fatal("登录态变化后应重新允许自动尝试")
+	}
 	manager.clearCaptchaRecoveryFailure("acc-1")
-	if manager.captchaRecoverySuppressed("acc-1") {
+	if manager.captchaRecoverySuppressed("acc-1", hashA) {
 		t.Fatal("成功后应清除抑制记录")
 	}
 
 	// 窗口过期后必须恢复自动尝试。
-	manager.markCaptchaRecoveryFailure("acc-1")
+	manager.markCaptchaRecoveryFailure("acc-1", cookieA)
 	manager.captchaGuardMu.Lock()
 	manager.captchaFailedAt["acc-1"] = time.Now().Add(-competitorDetailCaptchaCooldown - time.Minute)
 	manager.captchaGuardMu.Unlock()
-	if manager.captchaRecoverySuppressed("acc-1") {
+	if manager.captchaRecoverySuppressed("acc-1", hashA) {
 		t.Fatal("抑制窗口过期后应恢复尝试")
 	}
-	// 抑制与验证结果日志都不得带有 query 参数，且日志器缺失时必须安全回退。
+	// 抑制与验证结果日志都不得缺少人工接管地址，且日志器缺失时必须安全回退。
 	manager.logCompetitorDetailRecoverySuppressed("item-1", "https://h5api.m.goofish.com/h5/x5sec.htm?x5secdata=secret")
 	manager.logCompetitorDetailRecoveryFailure("item-1", "https://h5api.m.goofish.com/h5/x5sec.htm?x5secdata=secret", errors.New("滑块验证失败"))
 	manager.logCompetitorDetailRecoverySuccess("item-1", "playwright")

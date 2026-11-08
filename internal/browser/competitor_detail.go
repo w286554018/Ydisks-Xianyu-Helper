@@ -4,6 +4,8 @@ package browser
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -102,7 +104,7 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 	}
 	// 抑制窗口内不再重复发起自动验证：一次失败尝试本身会消耗多次滑块重试，
 	// 反复冲击只会加重平台风控，因此保持人工接管提示并等待窗口结束。
-	if m.captchaRecoverySuppressed(cookieID) {
+	if m.captchaRecoverySuppressed(cookieID, captchaCookieHash(cookieStr)) {
 		m.logCompetitorDetailRecoverySuppressed(trimmedItemID, punishURL)
 		return CompetitorDetail{}, "", err
 	}
@@ -110,7 +112,7 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 	// refreshed、captchaEngine、recoverErr 是验证后的新 Cookie、使用的引擎与失败原因。
 	refreshed, captchaEngine, recoverErr := m.TokenCaptchaRecoverWithEngine(ctx, cookieID, cookieStr, punishURL, true, nil)
 	if recoverErr != nil || strings.TrimSpace(refreshed) == "" {
-		m.markCaptchaRecoveryFailure(cookieID)
+		m.markCaptchaRecoveryFailure(cookieID, cookieStr)
 		m.logCompetitorDetailRecoveryFailure(trimmedItemID, punishURL, recoverErr)
 		return CompetitorDetail{}, "", err
 	}
@@ -305,7 +307,8 @@ const competitorDetailPunishMarker = "_____tmd_____"
 const competitorDetailCaptchaCooldown = 30 * time.Minute
 
 // captchaRecoverySuppressed 判断账号是否处于自动验证失败抑制窗口内。
-func (m *Manager) captchaRecoverySuppressed(cookieID string) bool {
+// cookieHash 是当前登录态摘要：登录态被外部更新（例如人工粘贴验证后的 Cookie）时不抑制，允许重新尝试。
+func (m *Manager) captchaRecoverySuppressed(cookieID, cookieHash string) bool {
 	m.captchaGuardMu.Lock()
 	defer m.captchaGuardMu.Unlock()
 	// failedAt、ok 是该账号最近一次自动验证失败时间与是否存在记录。
@@ -313,17 +316,31 @@ func (m *Manager) captchaRecoverySuppressed(cookieID string) bool {
 	if !ok {
 		return false
 	}
+	if m.captchaFailedCookieHash[cookieID] != cookieHash {
+		return false
+	}
 	return time.Since(failedAt) < competitorDetailCaptchaCooldown
 }
 
-// markCaptchaRecoveryFailure 记录一次自动验证失败并开启抑制窗口。
-func (m *Manager) markCaptchaRecoveryFailure(cookieID string) {
+// captchaCookieHash 计算登录态摘要，用于判断抑制窗口是否仍对应同一份凭据；只保存摘要，不保存明文。
+func captchaCookieHash(cookieStr string) string {
+	// sum 是登录态字符串的 SHA-256 摘要。
+	sum := sha256.Sum256([]byte(cookieStr))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// markCaptchaRecoveryFailure 记录一次自动验证失败并开启抑制窗口；cookieStr 是本次尝试使用的登录态。
+func (m *Manager) markCaptchaRecoveryFailure(cookieID, cookieStr string) {
 	m.captchaGuardMu.Lock()
 	defer m.captchaGuardMu.Unlock()
 	if m.captchaFailedAt == nil {
 		m.captchaFailedAt = make(map[string]time.Time)
 	}
 	m.captchaFailedAt[cookieID] = time.Now()
+	if m.captchaFailedCookieHash == nil {
+		m.captchaFailedCookieHash = make(map[string]string)
+	}
+	m.captchaFailedCookieHash[cookieID] = captchaCookieHash(cookieStr)
 }
 
 // clearCaptchaRecoveryFailure 清除抑制记录（自动验证成功时调用）。
@@ -374,7 +391,8 @@ func findCompetitorDetailPunishURL(body string) string {
 }
 
 // logCompetitorDetailRecoveryFailure 记录详情风控自动验证失败。
-// 只记录处罚地址的 host 与 path（已去除 query），不记录任何验证参数。
+// 除去除 query 的处罚地址外，按冻结验证码规范在最终失败时给出完整的人工验证地址
+// （verification_url），供人工在本机浏览器完成验证后接管；该字段只在自动验证最终失败时出现。
 func (m *Manager) logCompetitorDetailRecoveryFailure(itemID, punishURL string, err error) {
 	// logger 是浏览器管理器日志器；缺失时退回默认日志器，保证失败可见。
 	logger := m.logger
@@ -382,7 +400,7 @@ func (m *Manager) logCompetitorDetailRecoveryFailure(itemID, punishURL string, e
 		logger = slog.Default()
 	}
 	logger.Warn("竞品详情风控自动验证失败，保持人工接管", "item_id", itemID,
-		"punish_url", sanitizeDiagnosticURL(punishURL), "err", err)
+		"punish_url", sanitizeDiagnosticURL(punishURL), "verification_url", punishURL, "err", err)
 }
 
 // logCompetitorDetailRecoverySuccess 记录详情风控自动验证成功与使用的引擎。
