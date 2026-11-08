@@ -20,7 +20,7 @@ func buildMarketIntel(infrastructure RuntimeInfrastructure, browserManager *brow
 		concreteSearchPort = adapter.NewMarketIntelSearchPort(
 			adapter.NewSourcingBrowserGateway(browserManager),
 			adapter.NewSourcingCredentialReader(infrastructure.Store),
-			infrastructure.Store, 1, "")
+			infrastructure.Store, 1, "", infrastructure.Logger)
 	}
 	// verdictPort 是 AI 批量判定端口；密钥未配置时判定降级为只落快照。
 	verdictPort := adapter.NewMarketIntelVerdictPort(infrastructure.Store, 1)

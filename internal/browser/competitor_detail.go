@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/mxschmitt/playwright-go"
 )
@@ -78,23 +80,58 @@ type competitorDetailPayload struct {
 }
 
 // CompetitorItemDetail 打开竞品商品详情页并拦截页面自发的详情接口响应。
-// 单次调用最多产生 1 次详情页访问，禁止重试；风控与会话失效立即返回错误。
-func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr, itemID string) (CompetitorDetail, error) {
+// 单次调用最多产生 1 次详情页访问；会话失效立即返回错误。
+// 平台对详情接口返回处罚地址（要求在会话内完成人机验证）时，使用同一会话调用既有滑块验证并重试一次；
+// 第二个返回值是验证刷新后的完整 Cookie，未发生刷新时为空，供调用方落库。
+func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr, itemID string) (CompetitorDetail, string, error) {
 	if m == nil {
-		return CompetitorDetail{}, errors.New("浏览器管理器未初始化")
+		return CompetitorDetail{}, "", errors.New("浏览器管理器未初始化")
 	}
 	// trimmedItemID 是去空白后的商品标识，空值直接拒绝。
 	trimmedItemID := strings.TrimSpace(itemID)
 	if trimmedItemID == "" {
-		return CompetitorDetail{}, errors.New("商品 ID 不能为空")
+		return CompetitorDetail{}, "", errors.New("商品 ID 不能为空")
 	}
 	if strings.TrimSpace(cookieID) == "" {
-		return CompetitorDetail{}, errors.New("查看详情需要选择账号")
+		return CompetitorDetail{}, "", errors.New("查看详情需要选择账号")
 	}
+	// detail、punishURL、err 是首次访问结果、平台处罚地址与错误。
+	detail, punishURL, err := m.competitorDetailAttempt(ctx, cookieID, cookieStr, trimmedItemID)
+	if err == nil || punishURL == "" {
+		return detail, "", err
+	}
+	// 抑制窗口内不再重复发起自动验证：一次失败尝试本身会消耗多次滑块重试，
+	// 反复冲击只会加重平台风控，因此保持人工接管提示并等待窗口结束。
+	if m.captchaRecoverySuppressed(cookieID) {
+		m.logCompetitorDetailRecoverySuppressed(trimmedItemID, punishURL)
+		return CompetitorDetail{}, "", err
+	}
+	// 平台要求在会话内完成人机验证：验证地址只在内存中传递，不写日志。
+	// refreshed、captchaEngine、recoverErr 是验证后的新 Cookie、使用的引擎与失败原因。
+	refreshed, captchaEngine, recoverErr := m.TokenCaptchaRecoverWithEngine(ctx, cookieID, cookieStr, punishURL, true, nil)
+	if recoverErr != nil || strings.TrimSpace(refreshed) == "" {
+		m.markCaptchaRecoveryFailure(cookieID)
+		m.logCompetitorDetailRecoveryFailure(trimmedItemID, punishURL, recoverErr)
+		return CompetitorDetail{}, "", err
+	}
+	m.clearCaptchaRecoveryFailure(cookieID)
+	m.logCompetitorDetailRecoverySuccess(trimmedItemID, captchaEngine)
+	// 用验证后的 Cookie 重试一次；仍失败时把新 Cookie 交给调用方落库。
+	// retried、retryErr 是重试结果与错误。
+	retried, _, retryErr := m.competitorDetailAttempt(ctx, cookieID, refreshed, trimmedItemID)
+	if retryErr != nil {
+		return CompetitorDetail{}, refreshed, retryErr
+	}
+	return retried, refreshed, nil
+}
+
+// competitorDetailAttempt 执行一次详情页访问与轮询，返回详情、平台处罚地址与错误。
+// 处罚地址非空表示平台要求人机验证，调用方可用该地址在会话内完成验证后重试。
+func (m *Manager) competitorDetailAttempt(ctx context.Context, cookieID, cookieStr, trimmedItemID string) (CompetitorDetail, string, error) {
 	// page、release 是本次查询独占的浏览器页面与释放函数；release 必须配对调用。
 	page, release, err := m.newPage(ctx, cookieID, cookieStr, true)
 	if err != nil {
-		return CompetitorDetail{}, err
+		return CompetitorDetail{}, "", err
 	}
 	defer release()
 
@@ -104,6 +141,10 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 	var rets []string
 	// detailPayloads 收集解析成功的详情响应。
 	var detailPayloads []competitorDetailPayload
+	// diagnostics 收集触发风控或会话失效的响应定位信息，供错误路径留下可诊断日志。
+	var diagnostics []competitorDetailDiagnostic
+	// punishURL 保存平台处罚地址原始值（含 query），只用于会话内验证，不写日志。
+	var punishURL string
 	page.OnResponse(func(response playwright.Response) {
 		if !strings.Contains(response.URL(), competitorDetailAPIMarker) {
 			return
@@ -118,13 +159,33 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 		if !usable {
 			return
 		}
+		// retErr 表示该响应被归类为风控或会话失效；此时必须记录平台原始信息以便定位。
+		retErr := sourcingRetError(payload.Ret)
 		retMu.Lock()
 		rets = append(rets, payload.Ret...)
+		if retErr != nil {
+			diagnostics = append(diagnostics, buildCompetitorDetailDiagnostic(response.Status(), response.URL(), body, payload.Ret))
+			if punishURL == "" {
+				punishURL = findCompetitorDetailPunishURL(string(body))
+			}
+		}
 		if len(payload.Data.ItemDO.ImageInfos) > 0 || payload.Data.ItemDO.Desc != "" {
 			detailPayloads = append(detailPayloads, payload)
 		}
 		retMu.Unlock()
 	})
+	// takeDiagnostics 返回当前已收集的诊断快照；返回前必须先结束回调的临界区。
+	takeDiagnostics := func() []competitorDetailDiagnostic {
+		retMu.Lock()
+		defer retMu.Unlock()
+		return append([]competitorDetailDiagnostic(nil), diagnostics...)
+	}
+	// takePunishURL 返回已捕获的平台处罚地址；未捕获时为空串。
+	takePunishURL := func() string {
+		retMu.Lock()
+		defer retMu.Unlock()
+		return punishURL
+	}
 
 	// detailURL 是商品详情页地址。
 	detailURL := "https://www.goofish.com/item?id=" + trimmedItemID
@@ -133,7 +194,7 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
 		Timeout:   playwright.Float(sourcingNavigationTimeout),
 	}); gotoErr != nil {
-		return CompetitorDetail{}, fmt.Errorf("打开商品详情页失败: %w", gotoErr)
+		return CompetitorDetail{}, "", fmt.Errorf("打开商品详情页失败: %w", gotoErr)
 	}
 
 	// captured 是轮询期间观察到的详情数据。
@@ -144,7 +205,7 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 	for attempt := 0; attempt < competitorDetailPollAttempts; attempt++ {
 		// ctxErr 表示调用方已取消或超时，必须立即停止等待并释放页面。
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return CompetitorDetail{}, ctxErr
+			return CompetitorDetail{}, "", ctxErr
 		}
 		retMu.Lock()
 		// capturedRets 与 capturedPayloads 是当前快照。
@@ -156,7 +217,8 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 		retMu.Unlock()
 		// retErr 是根据返回码归类出的风控或会话失效错误，一旦出现立即中止查询。
 		if retErr := sourcingRetError(capturedRets); retErr != nil {
-			return CompetitorDetail{}, retErr
+			m.logCompetitorDetailDiagnostics(trimmedItemID, takeDiagnostics())
+			return CompetitorDetail{}, takePunishURL(), retErr
 		}
 		if found {
 			break
@@ -176,13 +238,14 @@ func (m *Manager) CompetitorItemDetail(ctx context.Context, cookieID, cookieStr,
 	retMu.Unlock()
 	// retErr 是最终返回码归类出的领域错误，优先于"无结果"返回。
 	if retErr := sourcingRetError(finalRets); retErr != nil {
-		return CompetitorDetail{}, retErr
+		m.logCompetitorDetailDiagnostics(trimmedItemID, takeDiagnostics())
+		return CompetitorDetail{}, takePunishURL(), retErr
 	}
 	if !found {
-		return CompetitorDetail{}, ErrSourcingNoResult
+		return CompetitorDetail{}, "", ErrSourcingNoResult
 	}
 
-	return buildCompetitorDetail(trimmedItemID, captured), nil
+	return buildCompetitorDetail(trimmedItemID, captured), "", nil
 }
 
 // parseCompetitorDetailPayload 解析详情接口响应正文；正文不是 JSON 或结构缺失时返回 usable=false。
@@ -232,4 +295,217 @@ func stripHTMLTags(raw string) string {
 	// parts 是按空白拆分的片段。
 	parts := strings.Fields(noTag)
 	return strings.Join(parts, " ")
+}
+
+// competitorDetailPunishMarker 是平台处罚地址标识；命中该标识说明需要在会话内完成人机验证。
+const competitorDetailPunishMarker = "_____tmd_____"
+
+// competitorDetailCaptchaCooldown 是自动验证失败后的抑制窗口。
+// 窗口内不再对同一账号发起自动验证，避免一次失败尝试（含多次滑块重试）反复冲击平台风控。
+const competitorDetailCaptchaCooldown = 30 * time.Minute
+
+// captchaRecoverySuppressed 判断账号是否处于自动验证失败抑制窗口内。
+func (m *Manager) captchaRecoverySuppressed(cookieID string) bool {
+	m.captchaGuardMu.Lock()
+	defer m.captchaGuardMu.Unlock()
+	// failedAt、ok 是该账号最近一次自动验证失败时间与是否存在记录。
+	failedAt, ok := m.captchaFailedAt[cookieID]
+	if !ok {
+		return false
+	}
+	return time.Since(failedAt) < competitorDetailCaptchaCooldown
+}
+
+// markCaptchaRecoveryFailure 记录一次自动验证失败并开启抑制窗口。
+func (m *Manager) markCaptchaRecoveryFailure(cookieID string) {
+	m.captchaGuardMu.Lock()
+	defer m.captchaGuardMu.Unlock()
+	if m.captchaFailedAt == nil {
+		m.captchaFailedAt = make(map[string]time.Time)
+	}
+	m.captchaFailedAt[cookieID] = time.Now()
+}
+
+// clearCaptchaRecoveryFailure 清除抑制记录（自动验证成功时调用）。
+func (m *Manager) clearCaptchaRecoveryFailure(cookieID string) {
+	m.captchaGuardMu.Lock()
+	defer m.captchaGuardMu.Unlock()
+	delete(m.captchaFailedAt, cookieID)
+}
+
+// logCompetitorDetailRecoverySuppressed 记录自动验证被抑制窗口跳过的信息。
+func (m *Manager) logCompetitorDetailRecoverySuppressed(itemID, punishURL string) {
+	// logger 是浏览器管理器日志器；缺失时退回默认日志器。
+	logger := m.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Warn("竞品详情风控自动验证处于抑制窗口，本次不再尝试", "item_id", itemID,
+		"punish_url", sanitizeDiagnosticURL(punishURL), "cooldown_minutes", int(competitorDetailCaptchaCooldown.Minutes()))
+}
+
+// findCompetitorDetailPunishURL 从详情响应正文中提取平台处罚地址原始值（保留 query）。
+// 该地址只交给会话内验证流程使用，调用方必须避免把它写入日志或错误文本。
+func findCompetitorDetailPunishURL(body string) string {
+	// normalized 是去掉 JSON 转义斜杠后的正文，保证转义写法同样可提取。
+	normalized := strings.ReplaceAll(body, "\\/", "/")
+	// start 是下一次搜索的起点。
+	start := 0
+	for {
+		// index 是本次检索到的 http 起始位置。
+		index := strings.Index(normalized[start:], "http")
+		if index < 0 {
+			return ""
+		}
+		// absolute 是候选地址在原文中的绝对位置。
+		absolute := start + index
+		// end 是候选地址结束位置（遇到 JSON 分隔符或空白即结束）。
+		end := absolute
+		for end < len(normalized) && !isCompetitorDetailURLTerminator(rune(normalized[end])) {
+			end++
+		}
+		// candidate 是候选地址原文（含 query）。
+		candidate := normalized[absolute:end]
+		if strings.Contains(candidate, competitorDetailPunishMarker) || strings.Contains(strings.ToLower(candidate), "punish") {
+			return candidate
+		}
+		start = end
+	}
+}
+
+// logCompetitorDetailRecoveryFailure 记录详情风控自动验证失败。
+// 只记录处罚地址的 host 与 path（已去除 query），不记录任何验证参数。
+func (m *Manager) logCompetitorDetailRecoveryFailure(itemID, punishURL string, err error) {
+	// logger 是浏览器管理器日志器；缺失时退回默认日志器，保证失败可见。
+	logger := m.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Warn("竞品详情风控自动验证失败，保持人工接管", "item_id", itemID,
+		"punish_url", sanitizeDiagnosticURL(punishURL), "err", err)
+}
+
+// logCompetitorDetailRecoverySuccess 记录详情风控自动验证成功与使用的引擎。
+func (m *Manager) logCompetitorDetailRecoverySuccess(itemID, captchaEngine string) {
+	// logger 是浏览器管理器日志器；缺失时退回默认日志器。
+	logger := m.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Info("竞品详情风控自动验证成功，已用新 Cookie 重试", "item_id", itemID, "captcha_engine", captchaEngine)
+}
+
+// competitorDetailDiagnostic 是一次触发风控或会话失效的响应定位信息。
+// 该结构只保留地址（已去除 query 与 fragment）、状态与平台返回码，不承载任何凭证。
+type competitorDetailDiagnostic struct {
+	// Status 是响应的 HTTP 状态码。
+	Status int
+	// URL 是响应地址，已去除 query 与 fragment。
+	URL string
+	// Rets 是平台返回码文本。
+	Rets []string
+	// CandidateURLs 是响应正文中疑似验证或处罚地址，最多保留 3 条且已去除 query。
+	CandidateURLs []string
+}
+
+// competitorDetailURLCandidateLimit 是单条响应保留的疑似验证地址数量上限。
+const competitorDetailURLCandidateLimit = 3
+
+// competitorDetailURLCandidateKeywords 是正文中判定为疑似验证或处罚地址的关键字。
+var competitorDetailURLCandidateKeywords = []string{"punish", "captcha", "x5sec", "verify", "verification", "validate"}
+
+// sanitizeDiagnosticURL 只保留地址的 scheme、host 与 path，去掉 query 与 fragment。
+// 该函数保证诊断日志不会携带可能含令牌的查询参数。
+func sanitizeDiagnosticURL(raw string) string {
+	// trimmed 是去空白后的地址。
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	// withoutFragment 是去掉 fragment 后的地址。
+	withoutFragment, fragmentIndex := trimmed, strings.IndexByte(trimmed, '#')
+	if fragmentIndex >= 0 {
+		withoutFragment = trimmed[:fragmentIndex]
+	}
+	// withoutQuery 是去掉 query 后的地址。
+	if queryIndex := strings.IndexByte(withoutFragment, '?'); queryIndex >= 0 {
+		return withoutFragment[:queryIndex]
+	}
+	return withoutFragment
+}
+
+// findVerificationURLs 从响应正文中提取疑似验证或处罚地址，最多返回 competitorDetailURLCandidateLimit 条。
+func findVerificationURLs(body []byte) []string {
+	// text 是响应正文文本；详情接口响应为 JSON，直接按子串扫描即可。
+	text := string(body)
+	// out 是按出现顺序收集的候选地址。
+	out := make([]string, 0, competitorDetailURLCandidateLimit)
+	// start 是下一次搜索的起点。
+	start := 0
+	for len(out) < competitorDetailURLCandidateLimit {
+		// index 是本次检索到的 http 起始位置。
+		index := strings.Index(text[start:], "http")
+		if index < 0 {
+			break
+		}
+		// absolute 是候选地址在原文中的绝对位置。
+		absolute := start + index
+		// end 是候选地址结束位置（遇到 JSON 分隔符或空白即结束）。
+		end := absolute
+		for end < len(text) && !isCompetitorDetailURLTerminator(rune(text[end])) {
+			end++
+		}
+		// candidate 是去 query 后的候选地址。
+		candidate := sanitizeDiagnosticURL(text[absolute:end])
+		// lower 用于关键字匹配，避免大小写差异漏判。
+		lower := strings.ToLower(candidate)
+		// keyword 是当前待匹配的关键字。
+		for _, keyword := range competitorDetailURLCandidateKeywords {
+			if strings.Contains(lower, keyword) {
+				out = append(out, candidate)
+				break
+			}
+		}
+		start = end
+	}
+	return out
+}
+
+// isCompetitorDetailURLTerminator 判断字符是否结束一个候选地址（JSON 分隔符或空白）。
+func isCompetitorDetailURLTerminator(r rune) bool {
+	switch r {
+	case '"', '\'', '\\', ',', '}', ']':
+		return true
+	default:
+		return unicode.IsSpace(r)
+	}
+}
+
+// buildCompetitorDetailDiagnostic 组装一次风控响应的定位信息。
+func buildCompetitorDetailDiagnostic(status int, responseURL string, body []byte, rets []string) competitorDetailDiagnostic {
+	return competitorDetailDiagnostic{
+		Status:        status,
+		URL:           sanitizeDiagnosticURL(responseURL),
+		Rets:          append([]string(nil), rets...),
+		CandidateURLs: findVerificationURLs(body),
+	}
+}
+
+// logCompetitorDetailDiagnostics 记录触发风控或会话失效时的响应定位信息。
+// 只记录地址、状态与返回码；地址已去除 query，不含任何凭证或令牌参数。
+func (m *Manager) logCompetitorDetailDiagnostics(itemID string, diagnostics []competitorDetailDiagnostic) {
+	if len(diagnostics) == 0 {
+		return
+	}
+	// first 是本次调用中第一条触发风控的响应诊断。
+	first := diagnostics[0]
+	// logger 是浏览器管理器日志器；缺失时退回默认日志器，保证失败始终可见。
+	logger := m.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Warn("竞品详情返回风控或会话失效", "item_id", itemID, "responses", len(diagnostics),
+		"status", first.Status, "response_url", first.URL,
+		"rets", strings.Join(first.Rets, " | "),
+		"candidate_urls", strings.Join(first.CandidateURLs, " | "))
 }

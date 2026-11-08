@@ -43,19 +43,19 @@ func TestResolveCookieID(t *testing.T) {
 	ctx := context.Background()
 
 	// 显式配置优先，且去除首尾空白。
-	explicit := NewMarketIntelSearchPort(nil, nil, nil, 1, "  explicit-account  ")
+	explicit := NewMarketIntelSearchPort(nil, nil, nil, 1, "  explicit-account  ", nil)
 	// err、got 是本次调用的返回错误；本次调用的实际返回值。
 	if got, err := explicit.resolveCookieID(ctx); err != nil || got != "explicit-account" {
 		t.Fatalf("显式账号解析不符: %q err=%v", got, err)
 	}
 	// 未配置账号且无账号目录时返回明确错误。
-	autoWithoutAdmin := NewMarketIntelSearchPort(nil, nil, nil, 1, "")
+	autoWithoutAdmin := NewMarketIntelSearchPort(nil, nil, nil, 1, "", nil)
 	// err 是本次调用的返回错误。
 	if _, err := autoWithoutAdmin.resolveCookieID(ctx); err == nil {
 		t.Fatal("无账号目录且未配置账号应报错")
 	}
 	// 有账号目录时自动选择第一个账号。
-	auto := NewMarketIntelSearchPort(nil, nil, store, 1, "  ")
+	auto := NewMarketIntelSearchPort(nil, nil, store, 1, "  ", nil)
 	// err、got 是本次调用的返回错误；本次调用的实际返回值。
 	if got, err := auto.resolveCookieID(ctx); err != nil || got != "scan-account" {
 		t.Fatalf("自动选择账号不符: %q err=%v", got, err)
@@ -89,7 +89,7 @@ func TestResolveCookieIDFromSetting(t *testing.T) {
 		t.Fatalf("固定新账号创建时间失败: %v", stampErr)
 	}
 	// port 是未显式指定账号的抓取端口。
-	port := NewMarketIntelSearchPort(nil, nil, store, userID, "")
+	port := NewMarketIntelSearchPort(nil, nil, store, userID, "", nil)
 	// 未配置设置时回落为账号目录第一个（创建时间最新）。
 	if got, err := port.resolveCookieID(ctx); err != nil || got != "newer-account" {
 		t.Fatalf("未配置设置应自动选择最新账号: %q err=%v", got, err)
@@ -141,13 +141,13 @@ func TestMarketIntelSearchPortFetchDetailErrors(t *testing.T) {
 	ctx := context.Background()
 
 	// 未配置账号且无账号目录时，详情抓取必须在浏览器调用前失败。
-	noAccount := NewMarketIntelSearchPort(nil, NewSourcingCredentialReader(store), nil, userID, "")
+	noAccount := NewMarketIntelSearchPort(nil, NewSourcingCredentialReader(store), nil, userID, "", nil)
 	// err 是本次调用的返回错误。
 	if _, err := noAccount.FetchCompetitorDetail(ctx, "item-1"); err == nil {
 		t.Fatal("无扫描账号应报错")
 	}
 	// 账号存在但归属用户不匹配时，凭证读取必须拒绝且不泄露登录态。
-	foreign := NewMarketIntelSearchPort(nil, NewSourcingCredentialReader(store), store, userID+999, "scan-account")
+	foreign := NewMarketIntelSearchPort(nil, NewSourcingCredentialReader(store), store, userID+999, "scan-account", nil)
 	// err 是本次调用的返回错误。
 	if _, err := foreign.FetchCompetitorDetail(ctx, "item-1"); err == nil {
 		t.Fatal("账号不属于当前用户时应报错")
@@ -265,4 +265,38 @@ func TestClassifyDetailPlatformError(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPersistRefreshedCookie 验证人机验证刷新后的 Cookie 落库与空值跳过。
+func TestPersistRefreshedCookie(t *testing.T) {
+	// store、userID 是含一个账号的测试数据库与账号归属用户。
+	store, userID := newMarketIntelAdapterStore(t)
+	// ctx 是本测试共用的非取消上下文。
+	ctx := context.Background()
+	// port 是被测抓取端口。
+	port := NewMarketIntelSearchPort(nil, nil, store, userID, "", nil)
+
+	// 空刷新值必须直接跳过，不触碰数据库。
+	port.persistRefreshedCookie(ctx, "scan-account", "   ")
+	// value、err 是落库后读回的凭据与读取错误。
+	if value, err := store.Cookies.GetValue(ctx, "scan-account"); err != nil || value != "unb=1; _m_h5_tk=abc" {
+		t.Fatalf("空刷新值不应改写现存凭据: err=%v", err)
+	}
+
+	// 正常刷新值必须写入同一账号。
+	refreshed := "unb=1; _m_h5_tk=newtk; x5sec=passed"
+	port.persistRefreshedCookie(ctx, "scan-account", refreshed)
+	// saved、readErr 是落库后的凭据与读取错误。
+	saved, readErr := store.Cookies.GetValue(ctx, "scan-account")
+	if readErr != nil || saved != refreshed {
+		t.Fatalf("刷新后的凭据未落库: err=%v", readErr)
+	}
+
+	// 未注入存储时必须安全跳过（不 panic）。
+	// bare 是未装配存储的端口。
+	bare := NewMarketIntelSearchPort(nil, nil, nil, userID, "", nil)
+	bare.persistRefreshedCookie(ctx, "scan-account", refreshed)
+
+	// 账号不存在时只记录日志，不 panic、不影响调用方。
+	port.persistRefreshedCookie(ctx, "missing-account", refreshed)
 }

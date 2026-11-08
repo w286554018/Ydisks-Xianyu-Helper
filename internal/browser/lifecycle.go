@@ -184,6 +184,10 @@ type Manager struct {
 
 	pw     *playwright.Playwright
 	logger *slog.Logger
+	// captchaGuardMu 保护 captchaFailedAt；锁内只做内存读写，不进行任何外部 I/O。
+	captchaGuardMu sync.Mutex
+	// captchaFailedAt 记录每个账号最近一次自动滑块验证失败时间；进程重启后清空，不参与持久化。
+	captchaFailedAt map[string]time.Time
 
 	// browserFingerprint is observed from the bundled Chromium once during
 	// initialization.  Headless contexts use the same identity with only the

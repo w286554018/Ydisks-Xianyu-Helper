@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -31,11 +32,16 @@ type MarketIntelSearchPort struct {
 	userID int64
 	// cookieID 是构造期显式指定的扫描账号；为空时按系统设置或账号目录解析。
 	cookieID string
+	// logger 记录风控自动验证后的 Cookie 落库失败等运维信息；缺失时退回默认日志器。
+	logger *slog.Logger
 }
 
 // NewMarketIntelSearchPort 构造市场情报搜索端口；cookieID 为空时按系统设置或账号目录解析抓取账号。
-func NewMarketIntelSearchPort(gateway *SourcingBrowserGateway, credentials *SourcingCredentialReader, store *db.Store, userID int64, cookieID string) *MarketIntelSearchPort {
-	return &MarketIntelSearchPort{gateway: gateway, credentials: credentials, store: store, userID: userID, cookieID: cookieID}
+func NewMarketIntelSearchPort(gateway *SourcingBrowserGateway, credentials *SourcingCredentialReader, store *db.Store, userID int64, cookieID string, logger *slog.Logger) *MarketIntelSearchPort {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &MarketIntelSearchPort{gateway: gateway, credentials: credentials, store: store, userID: userID, cookieID: cookieID, logger: logger}
 }
 
 // resolveCookieID 返回本次抓取使用的账号标识：构造期显式指定 > 系统设置指定 > 账号目录第一个。
@@ -602,8 +608,9 @@ func (p *MarketIntelSearchPort) FetchCompetitorDetail(ctx context.Context, itemI
 	if readErr != nil {
 		return marketintel.CompetitorDetail{}, fmt.Errorf("读取扫描账号登录态失败: %w", readErr)
 	}
-	// detail、fetchErr 是浏览器抓取结果与抓取错误。
-	detail, fetchErr := p.gateway.manager.CompetitorItemDetail(ctx, cookieID, cookieStr, itemID)
+	// detail、refreshed、fetchErr 是浏览器抓取结果、自动验证刷新后的 Cookie 与抓取错误。
+	detail, refreshed, fetchErr := p.gateway.manager.CompetitorItemDetail(ctx, cookieID, cookieStr, itemID)
+	p.persistRefreshedCookie(ctx, cookieID, refreshed)
 	if fetchErr != nil {
 		return marketintel.CompetitorDetail{}, classifyDetailPlatformError(fetchErr)
 	}
@@ -612,6 +619,19 @@ func (p *MarketIntelSearchPort) FetchCompetitorDetail(ctx context.Context, itemI
 		DescText: detail.DescText, Images: detail.Images,
 		SellerNickname: detail.SellerNickname, SellerID: detail.SellerID,
 	}, nil
+}
+
+// persistRefreshedCookie 落库人机验证刷新后的 Cookie。
+// 验证后的新 Cookie 必须落库，否则每次查看详情都会重新触发人机验证；
+// 落库失败不阻断本次详情返回，但必须留下可见日志，便于发现凭据未更新。
+func (p *MarketIntelSearchPort) persistRefreshedCookie(ctx context.Context, cookieID, refreshed string) {
+	if strings.TrimSpace(refreshed) == "" || p.store == nil || p.store.Cookies == nil {
+		return
+	}
+	// saveErr 是落库刷新后凭据返回的错误。
+	if saveErr := p.store.Cookies.UpdateValueExisting(ctx, cookieID, refreshed); saveErr != nil {
+		p.logger.Warn("保存详情风控验证后的 Cookie 失败", "account", cookieID, "err", saveErr)
+	}
 }
 
 // classifyDetailPlatformError 把浏览器详情抓取错误归类为应用层稳定错误。
