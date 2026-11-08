@@ -51,3 +51,13 @@
 
 # Private deployment keys, backups and migration artifacts
 /.local/server-access/
+
+# 本地派生与调试产物（不得提交：二进制、临时数据与截图）
+/.local/
+/.playwright-mcp/
+/dist/
+/node_modules/
+/dbverify
+/tmp-export
+/capture-lifecycle
+/.screen-*.png
