@@ -106,7 +106,7 @@ func (f *fakeAIRewriter) AnalyzeSellingPoints(context.Context, string, string, s
 }
 
 // newDetailServiceForTest 构造带详情缓存能力的市场情报服务。
-func newDetailServiceForTest(scan scanPersistence, detail detailFetcher, verdict VerdictPort) *Service {
+func newDetailServiceForTest(scan scanPersistence, detail DetailFetcher, verdict VerdictPort) *Service {
 	return NewService(newFakeStore(), scan, nil, verdict, detail, nil)
 }
 

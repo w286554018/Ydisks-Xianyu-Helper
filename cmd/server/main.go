@@ -440,9 +440,14 @@ func openServerInfrastructure(ctx context.Context, startup serverStartupConfig, 
 // buildServerRuntime 构造浏览器、账号、自动化、通知、应用服务和 HTTP 服务依赖，并登记全部生命周期组件但不启动它们。
 func buildServerRuntime(opts serverOptions, infrastructure serverInfrastructure) (serverRuntime, error) {
 	// runtime、buildErr 分别是组合层返回的完整运行时快照及其装配失败原因。
-	runtime, buildErr := compositionruntime.BuildRuntime(compositionruntime.RuntimeOptions{
+	// runtimeOptions 是组合根运行配置；本机抓取助手地址与令牌来自环境变量，两者缺省即表示不启用该通道。
+	runtimeOptions := compositionruntime.RuntimeOptions{
 		NoBrowser: opts.noBrowser, SecureCookie: opts.secure, WebDir: opts.webDir, Addr: opts.addr,
-	}, compositionruntime.RuntimeInfrastructure{Store: infrastructure.store, Logger: infrastructure.logger})
+		LocalFetchAgentURL:   strings.TrimSpace(os.Getenv("LOCAL_FETCH_AGENT_URL")),
+		LocalFetchAgentToken: strings.TrimSpace(os.Getenv("LOCAL_FETCH_AGENT_TOKEN")),
+	}
+	// runtime、buildErr 分别是组合层返回的完整运行时快照及其装配失败原因。
+	runtime, buildErr := compositionruntime.BuildRuntime(runtimeOptions, compositionruntime.RuntimeInfrastructure{Store: infrastructure.store, Logger: infrastructure.logger})
 	if buildErr != nil {
 		return serverRuntime{}, buildErr
 	}

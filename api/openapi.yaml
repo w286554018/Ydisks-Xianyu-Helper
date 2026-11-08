@@ -9087,6 +9087,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 本机抓取助手不可用（未启动、隧道断开或未登录闲鱼），统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/market-intel/items/{item_id}/rewrite":
     post:
       operationId: postApiV1MarketIntelItemsItemIdRewrite

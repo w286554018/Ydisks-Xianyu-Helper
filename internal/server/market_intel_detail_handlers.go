@@ -189,6 +189,20 @@ func (s *Server) writeMarketIntelDetailError(w http.ResponseWriter, itemID strin
 		writeErr(w, http.StatusBadRequest, marketintel.ErrAINotConfigured.Error())
 	case errors.Is(err, marketintel.ErrImageLibraryUnavailable):
 		writeErr(w, http.StatusServiceUnavailable, marketintel.ErrImageLibraryUnavailable.Error())
+	case errors.Is(err, marketintel.ErrLocalFetchUnavailable):
+		// 本机抓取助手不可用必须给出可操作提示；此处刻意不回退服务器侧浏览器，
+		// 因为该路径已被平台确定性判罚，回退只会浪费时间并加重风控。
+		writeErrCode(w, http.StatusServiceUnavailable, "local_fetch_unavailable",
+			marketintel.ErrLocalFetchUnavailable.Error(), "")
+	case errors.Is(err, marketintel.ErrLocalFetchUnauthorized):
+		writeErrCode(w, http.StatusServiceUnavailable, "local_fetch_unauthorized",
+			marketintel.ErrLocalFetchUnauthorized.Error(), "")
+	case errors.Is(err, marketintel.ErrLocalFetchNotLoggedIn):
+		writeErrCode(w, http.StatusServiceUnavailable, "local_fetch_not_logged_in",
+			marketintel.ErrLocalFetchNotLoggedIn.Error(), "")
+	case errors.Is(err, marketintel.ErrLocalFetchRiskControl):
+		writeErrCode(w, http.StatusConflict, "local_fetch_risk_control",
+			marketintel.ErrLocalFetchRiskControl.Error(), "")
 	default:
 		// 未归类错误（含浏览器抓取失败）必须留下可诊断日志，否则线上故障不可见；
 		// logsafe.Error 只保留定位所需的错误文本，不含 Cookie 或令牌明文。

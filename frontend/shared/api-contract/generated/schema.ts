@@ -17517,6 +17517,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description 本机抓取助手不可用（未启动、隧道断开或未登录闲鱼），统一错误响应 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     postApiV1MarketIntelItemsItemIdRewrite: {

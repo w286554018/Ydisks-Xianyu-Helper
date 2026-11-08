@@ -29,6 +29,10 @@ type RuntimeOptions struct {
 	WebDir string
 	// Addr 是 HTTP 监听地址。
 	Addr string
+	// LocalFetchAgentURL 是本机抓取助手地址（经 SSH 反向隧道暴露到本机回环）；空值表示未启用。
+	LocalFetchAgentURL string
+	// LocalFetchAgentToken 是与本机抓取助手共享的令牌；空值表示未启用。该值不得写入日志。
+	LocalFetchAgentToken string
 }
 
 // RuntimeInfrastructure 是 cmd 打开后交给组合根的基础设施资源。
@@ -170,7 +174,7 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 		return Runtime{}, sourcingErr
 	}
 	// marketIntelService 是市场情报应用服务；浏览器禁用时仍可装配（扫描会明确降级）。
-	marketIntelService := buildMarketIntel(infrastructure, browserManager)
+	marketIntelService := buildMarketIntel(infrastructure, browserManager, options)
 	// marketIntelSchedulerErr 是市场情报每日调度组件登记失败原因。
 	if marketIntelSchedulerErr := buildMarketIntelScheduler(infrastructure, lifecycleCoordinator, marketIntelService); marketIntelSchedulerErr != nil {
 		return Runtime{}, marketIntelSchedulerErr
