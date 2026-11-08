@@ -3,6 +3,7 @@ package browser
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -293,6 +294,79 @@ func TestReadCookieValue(t *testing.T) {
 		got, ok := readCookieValue(cookieStr, tc.key)
 		if got != tc.want || ok != tc.wantOK {
 			t.Fatalf("readCookieValue(%q) = (%q,%v)，期望 (%q,%v)", tc.key, got, ok, tc.want, tc.wantOK)
+		}
+	}
+}
+
+// TestParseCompetitorDetailResponseTolerantFields 验证新版接口的字段类型与命名差异不会影响详情解析：
+// sellerId 为数字、价格改用 soldPrice、卖家昵称改用 nick。
+func TestParseCompetitorDetailResponseTolerantFields(t *testing.T) {
+	// body 模拟新版接口响应。
+	body := []byte(`{"ret":["SUCCESS::调用成功"],"data":{"itemDO":{"title":"测试商品","desc":"<p>描述文本</p>","soldPrice":12.5,"imageInfos":[{"url":"https://img.example.com/a.jpg"}]},"sellerDO":{"sellerId":3835297081,"nick":"东菱之家"}}}`)
+	// detail、rets、usable 是解析出的详情、接口返回码与是否可用。
+	detail, rets, usable := ParseCompetitorDetailResponse("1095623904703", body)
+	if !usable {
+		t.Fatalf("新版字段应可解析，rets=%v", rets)
+	}
+	if len(rets) != 1 || rets[0] != "SUCCESS::调用成功" {
+		t.Fatalf("返回码必须透传，实际 %v", rets)
+	}
+	if detail.Title != "测试商品" || detail.DescText != "描述文本" {
+		t.Fatalf("标题或描述解析错误: %+v", detail)
+	}
+	if detail.Price != "12.5" {
+		t.Fatalf("价格应回退到 soldPrice，实际 %q", detail.Price)
+	}
+	if detail.SellerID != "3835297081" || detail.SellerNickname != "东菱之家" {
+		t.Fatalf("卖家信息解析错误: %+v", detail)
+	}
+	if len(detail.Images) != 1 || detail.Images[0] != "https://img.example.com/a.jpg" {
+		t.Fatalf("图片解析错误: %v", detail.Images)
+	}
+}
+
+// TestParseCompetitorDetailResponseRiskControl 验证被判风控时返回码透传且不视为可用详情。
+func TestParseCompetitorDetailResponseRiskControl(t *testing.T) {
+	// body 是平台判罚响应。
+	body := []byte(`{"ret":["FAIL_SYS_USER_VALIDATE","RGV587_ERROR::SM::哎哟喂,被挤爆啦,请稍后重试"],"data":{"url":"https://h5api.m.goofish.com/h5/x/_____tmd_____/punish"}}`)
+	// detail、rets、usable 是解析出的详情、接口返回码与是否可用。
+	detail, rets, usable := ParseCompetitorDetailResponse("1", body)
+	if usable {
+		t.Fatal("风控响应不得视为可用详情")
+	}
+	if len(rets) != 2 || !strings.Contains(rets[0], "FAIL_SYS_USER_VALIDATE") {
+		t.Fatalf("风控返回码必须透传，实际 %v", rets)
+	}
+	if detail.Title != "" {
+		t.Fatalf("风控响应不应产生详情字段: %+v", detail)
+	}
+}
+
+// TestFlexStringUnmarshal 验证兼容字符串、数字与 null 的文本字段解析。
+func TestFlexStringUnmarshal(t *testing.T) {
+	// cases 是各输入片段与期望文本。
+	cases := []struct {
+		// raw 是原始 JSON 片段。
+		raw string
+		// want 是期望解析结果。
+		want string
+	}{
+		{raw: `"abc"`, want: "abc"},
+		{raw: `123`, want: "123"},
+		{raw: `12.5`, want: "12.5"},
+		{raw: `null`, want: ""},
+		{raw: `""`, want: ""},
+	}
+	// tc 是当前用例。
+	for _, tc := range cases {
+		// value 是待赋值的目标。
+		var value flexString
+		if // err 是该片段解析失败原因。
+		err := json.Unmarshal([]byte(tc.raw), &value); err != nil {
+			t.Fatalf("解析 %s 失败: %v", tc.raw, err)
+		}
+		if string(value) != tc.want {
+			t.Fatalf("解析 %s 期望 %q，实际 %q", tc.raw, tc.want, string(value))
 		}
 	}
 }

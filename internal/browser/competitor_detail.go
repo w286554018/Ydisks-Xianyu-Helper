@@ -60,11 +60,13 @@ type competitorDetailPayload struct {
 			Title string `json:"title"`
 			// Desc 是商品描述（可含 HTML）。
 			Desc string `json:"desc"`
-			// Price 是价格文本。
+			// Price 是价格分段文本。
 			Price []struct {
 				// Text 是价格分段文本。
-				Text string `json:"text"`
+				Text flexString `json:"text"`
 			} `json:"price"`
+			// SoldPrice 是商品价格文本（新版接口在同一层级直接给出）。
+			SoldPrice flexString `json:"soldPrice"`
 			// ImageInfos 是商品图片信息列表。
 			ImageInfos []struct {
 				// URL 是图片地址。
@@ -74,11 +76,40 @@ type competitorDetailPayload struct {
 		// SellerDO 是卖家信息。
 		SellerDO struct {
 			// SellerID 是卖家 userId。
-			SellerID string `json:"sellerId"`
-			// NickName 是卖家昵称。
+			SellerID flexString `json:"sellerId"`
+			// NickName 是卖家昵称（旧版字段）。
 			NickName string `json:"nickName"`
+			// Nick 是卖家昵称（新版接口字段）。
+			Nick string `json:"nick"`
 		} `json:"sellerDO"`
 	} `json:"data"`
+}
+
+// flexString 是兼容「字符串或数字」的文本字段类型。
+// 平台会在不同接口变体里把 sellerId、价格文本一类字段返回成数字或字符串，
+// 使用该类型可避免个别字段类型差异导致整段响应解析失败、进而把可用详情误判为不可用。
+type flexString string
+
+// UnmarshalJSON 兼容解析字符串、数字与 null：字符串按字面量保存，其它标量按其原始文本保存。
+func (f *flexString) UnmarshalJSON(data []byte) error {
+	// trimmed 是去除空白后的原始 JSON 片段。
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" || trimmed == "null" {
+		*f = ""
+		return nil
+	}
+	if strings.HasPrefix(trimmed, `"`) {
+		// text 是字符串字面量；非法字面量直接返回错误，避免静默丢字段。
+		var text string
+		if // err 是字符串字面量解析失败原因。
+		err := json.Unmarshal([]byte(trimmed), &text); err != nil {
+			return err
+		}
+		*f = flexString(text)
+		return nil
+	}
+	*f = flexString(trimmed)
+	return nil
 }
 
 // CompetitorItemDetail 打开竞品商品详情页并拦截页面自发的详情接口响应。
@@ -264,21 +295,30 @@ func parseCompetitorDetailPayload(body []byte) (competitorDetailPayload, bool) {
 
 // buildCompetitorDetail 把详情接口数据转换为竞品详情视图：价格按分段拼接，图片去空白后按顺序收集。
 func buildCompetitorDetail(itemID string, captured competitorDetailPayload) CompetitorDetail {
+	// sellerNick 是卖家昵称：新版接口用 nick，旧版接口用 nickName，取先出现的非空值。
+	sellerNick := strings.TrimSpace(captured.Data.SellerDO.Nick)
+	if sellerNick == "" {
+		sellerNick = strings.TrimSpace(captured.Data.SellerDO.NickName)
+	}
 	// detail 是转换后的竞品详情。
 	detail := CompetitorDetail{
 		ItemID:         itemID,
 		Title:          strings.TrimSpace(captured.Data.ItemDO.Title),
 		DescText:       stripHTMLTags(captured.Data.ItemDO.Desc),
-		SellerID:       strings.TrimSpace(captured.Data.SellerDO.SellerID),
-		SellerNickname: strings.TrimSpace(captured.Data.SellerDO.NickName),
+		SellerID:       strings.TrimSpace(string(captured.Data.SellerDO.SellerID)),
+		SellerNickname: sellerNick,
 	}
 	// pricePart 拼接分段价格文本。
 	var pricePart strings.Builder
 	// priceItem 是价格分段。
 	for _, priceItem := range captured.Data.ItemDO.Price {
-		pricePart.WriteString(priceItem.Text)
+		pricePart.WriteString(string(priceItem.Text))
 	}
 	detail.Price = strings.TrimSpace(pricePart.String())
+	// 新版接口不再给出价格分段，改为同一层级直接给出 soldPrice，此时按该字段回退。
+	if detail.Price == "" {
+		detail.Price = strings.TrimSpace(string(captured.Data.ItemDO.SoldPrice))
+	}
 	// imageInfo 遍历收集图片 URL。
 	for _, imageInfo := range captured.Data.ItemDO.ImageInfos {
 		// imgURL 是去空白后的图片地址。
@@ -288,6 +328,22 @@ func buildCompetitorDetail(itemID string, captured competitorDetailPayload) Comp
 		}
 	}
 	return detail
+}
+
+// ParseCompetitorDetailResponse 供本机抓取助手复用详情接口响应的解析逻辑：
+// 返回解析出的详情、接口返回码与是否可用；rets 始终返回，便于调用方判定风控与成功。
+func ParseCompetitorDetailResponse(itemID string, body []byte) (CompetitorDetail, []string, bool) {
+	// payload、parsed 是解析后的详情结构与是否解析成功。
+	payload, parsed := parseCompetitorDetailPayload(body)
+	if !parsed {
+		return CompetitorDetail{}, nil, false
+	}
+	// rets 是接口返回码副本，风控判定依赖它。
+	rets := append([]string(nil), payload.Ret...)
+	if strings.TrimSpace(payload.Data.ItemDO.Title) == "" {
+		return CompetitorDetail{}, rets, false
+	}
+	return buildCompetitorDetail(itemID, payload), rets, true
 }
 
 // stripHTMLTags 移除描述文本中的 HTML 标签并压缩空白。
