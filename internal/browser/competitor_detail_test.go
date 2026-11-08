@@ -207,7 +207,8 @@ func TestFindCompetitorDetailPunishURL(t *testing.T) {
 	}
 }
 
-// TestCaptchaRecoverySuppression 验证自动验证失败的抑制窗口：失败后抑制、成功后清除、窗口过期或凭据变化后恢复。
+// TestCaptchaRecoverySuppression 验证自动验证失败的抑制窗口：失败后抑制、成功后清除、
+// 短期令牌轮换不影响抑制、窗口过期或登录态身份变化后恢复。
 func TestCaptchaRecoverySuppression(t *testing.T) {
 	// manager 是被测浏览器管理器；仅使用内存抑制状态，不启动浏览器。
 	manager := &Manager{}
@@ -228,6 +229,16 @@ func TestCaptchaRecoverySuppression(t *testing.T) {
 	manager.markCaptchaRecoveryFailure("acc-1", cookieA)
 	if !manager.captchaRecoverySuppressed("acc-1", hashA) {
 		t.Fatal("失败后应进入抑制窗口")
+	}
+	// 平台每次请求都会轮换 _m_h5_tk、t 一类的短期令牌；仅令牌变化时抑制窗口必须继续有效，
+	// 否则每次点击都会重新发起 3+3 次滑块验证，反而加重平台风控。
+	// cookieRotated 是同一份登录态在短期令牌轮换后的取值。
+	cookieRotated := "unb=1; _m_h5_tk=z; t=99; _tb_token_=yy"
+	if captchaCookieHash(cookieRotated) != hashA {
+		t.Fatal("短期令牌轮换不得改变登录态身份摘要")
+	}
+	if !manager.captchaRecoverySuppressed("acc-1", captchaCookieHash(cookieRotated)) {
+		t.Fatal("短期令牌轮换后抑制窗口必须继续有效")
 	}
 	// 其它账号不受影响。
 	if manager.captchaRecoverySuppressed("acc-2", hashA) {
@@ -254,4 +265,34 @@ func TestCaptchaRecoverySuppression(t *testing.T) {
 	manager.logCompetitorDetailRecoverySuppressed("item-1", "https://h5api.m.goofish.com/h5/x5sec.htm?x5secdata=secret")
 	manager.logCompetitorDetailRecoveryFailure("item-1", "https://h5api.m.goofish.com/h5/x5sec.htm?x5secdata=secret", errors.New("滑块验证失败"))
 	manager.logCompetitorDetailRecoverySuccess("item-1", "playwright")
+}
+
+// TestReadCookieValue 验证 Cookie 取值解析：命中、缺失、空值、缺少分隔符与前后空白。
+func TestReadCookieValue(t *testing.T) {
+	// cookieStr 是待解析的 Cookie 串。
+	cookieStr := "unb=1; _m_h5_tk=abc; x5sec=; bare; flag = spaced "
+	// cases 是每个键的期望取值与是否存在。
+	cases := []struct {
+		// key 是待查找的 Cookie 键。
+		key string
+		// want 是期望取值。
+		want string
+		// wantOK 是期望是否找到该键。
+		wantOK bool
+	}{
+		{key: "unb", want: "1", wantOK: true},
+		{key: "_m_h5_tk", want: "abc", wantOK: true},
+		{key: "x5sec", want: "", wantOK: true},
+		{key: "flag", want: "spaced", wantOK: true},
+		{key: "bare", want: "", wantOK: false},
+		{key: "missing", want: "", wantOK: false},
+	}
+	// tc 是当前用例。
+	for _, tc := range cases {
+		// got、ok 是实际取值与是否找到该键。
+		got, ok := readCookieValue(cookieStr, tc.key)
+		if got != tc.want || ok != tc.wantOK {
+			t.Fatalf("readCookieValue(%q) = (%q,%v)，期望 (%q,%v)", tc.key, got, ok, tc.want, tc.wantOK)
+		}
+	}
 }

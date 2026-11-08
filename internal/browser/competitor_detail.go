@@ -322,11 +322,45 @@ func (m *Manager) captchaRecoverySuppressed(cookieID, cookieHash string) bool {
 	return time.Since(failedAt) < competitorDetailCaptchaCooldown
 }
 
-// captchaCookieHash 计算登录态摘要，用于判断抑制窗口是否仍对应同一份凭据；只保存摘要，不保存明文。
+// captchaIdentityCookieKeys 是判定「登录态是否被外部更新」的稳定 Cookie 键。
+// 只保留账号身份与验证通过标记：平台每次请求都会轮换 _m_h5_tk、t 一类的短期令牌，
+// 若把整串 Cookie 计入摘要，抑制窗口会被令牌轮换不断打断，从而反复冲击平台风控。
+var captchaIdentityCookieKeys = []string{"unb", "cookie2", "cookie17", "lgc", "sgcookie", "x5sec"}
+
+// captchaCookieHash 计算登录态身份摘要，用于判断抑制窗口是否仍对应同一份凭据。
+// 只对稳定身份键与验证通过标记做摘要（SHA-256 前 16 位），既不保存 Cookie 明文，
+// 也能在人工粘贴验证后的 Cookie（出现或更新 x5sec）时立即重新允许自动尝试。
 func captchaCookieHash(cookieStr string) string {
-	// sum 是登录态字符串的 SHA-256 摘要。
-	sum := sha256.Sum256([]byte(cookieStr))
+	// pairs 是按稳定身份键收集的 k=v 片段；键顺序固定，保证同一份凭据得到同一摘要。
+	pairs := make([]string, 0, len(captchaIdentityCookieKeys))
+	// key 是当前参与摘要的稳定身份键。
+	for _, key := range captchaIdentityCookieKeys {
+		// value、ok 是该键在登录态中的取值与是否存在；缺失说明这份凭据没有该标记。
+		value, ok := readCookieValue(cookieStr, key)
+		if !ok {
+			continue
+		}
+		pairs = append(pairs, key+"="+value)
+	}
+	// sum 是稳定身份片段的 SHA-256 摘要。
+	sum := sha256.Sum256([]byte(strings.Join(pairs, ";")))
 	return hex.EncodeToString(sum[:])[:16]
+}
+
+// readCookieValue 从 Cookie 串中读取指定键的值；键不存在或片段缺少分隔符时返回 false。
+func readCookieValue(cookieStr, key string) (string, bool) {
+	// field 是当前遍历到的 Cookie 片段。
+	for _, field := range strings.Split(cookieStr, ";") {
+		// name、value、found 是该片段的键、值与是否存在分隔符。
+		name, value, found := strings.Cut(field, "=")
+		if !found {
+			continue
+		}
+		if strings.TrimSpace(name) == key {
+			return strings.TrimSpace(value), true
+		}
+	}
+	return "", false
 }
 
 // markCaptchaRecoveryFailure 记录一次自动验证失败并开启抑制窗口；cookieStr 是本次尝试使用的登录态。
@@ -348,6 +382,8 @@ func (m *Manager) clearCaptchaRecoveryFailure(cookieID string) {
 	m.captchaGuardMu.Lock()
 	defer m.captchaGuardMu.Unlock()
 	delete(m.captchaFailedAt, cookieID)
+	// 同时清除摘要记录，避免成功后再被同一账号的陈旧摘要影响后续判断。
+	delete(m.captchaFailedCookieHash, cookieID)
 }
 
 // logCompetitorDetailRecoverySuppressed 记录自动验证被抑制窗口跳过的信息。
