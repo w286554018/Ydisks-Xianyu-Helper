@@ -457,3 +457,81 @@ func TestStatsOwnershipFailurePropagates(t *testing.T) {
 		t.Fatal("归属校验失败时不得发起抓取")
 	}
 }
+
+// accountAwareStatsStore 是按账号隔离的内存仓储替身，用于验证列表统计的分组读取。
+type accountAwareStatsStore struct {
+	// rows 是按「账号 + 商品」索引的统计。
+	rows map[string]ItemStats
+	// listErr 是注入的查询失败。
+	listErr error
+}
+
+// ListItemStats 只返回指定账号下的统计，未抓取的商品不出现在结果中。
+func (f *accountAwareStatsStore) ListItemStats(_ context.Context, cookieID string, itemIDs []string) (map[string]ItemStats, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	// out 是命中该账号的统计集合。
+	out := make(map[string]ItemStats)
+	// itemID 是本次待查询的商品标识。
+	for _, itemID := range itemIDs {
+		if // stats、ok 是该商品在该账号下的统计与是否存在。
+		stats, ok := f.rows[ItemStatsKey(cookieID, itemID)]; ok {
+			out[itemID] = stats
+		}
+	}
+	return out, nil
+}
+
+// UpsertItemStats 在本替身中不参与断言，直接成功返回。
+func (f *accountAwareStatsStore) UpsertItemStats(context.Context, ItemStats) error { return nil }
+
+// TestItemStatsKeyIncludesAccount 验证统计索引键同时包含账号与商品。
+func TestItemStatsKeyIncludesAccount(t *testing.T) {
+	if ItemStatsKey("acc1", "i1") == ItemStatsKey("acc2", "i1") {
+		t.Fatal("不同账号下的同一商品必须得到不同索引键")
+	}
+}
+
+// TestListItemStatsForItemsGroupsByAccount 验证列表统计按账号分组读取、按键合并并跳过无效引用。
+func TestListItemStatsForItemsGroupsByAccount(t *testing.T) {
+	// store 保存两个账号下各一条一小时内抓取的统计。
+	store := &accountAwareStatsStore{rows: map[string]ItemStats{
+		ItemStatsKey("acc1", "i1"): {CookieID: "acc1", ItemID: "i1", BrowseCnt: 11, FetchedAt: statsTestNow.Add(-time.Hour)},
+		ItemStatsKey("acc2", "i1"): {CookieID: "acc2", ItemID: "i1", BrowseCnt: 22, FetchedAt: statsTestNow.Add(-time.Hour)},
+	}}
+	// service 是被测服务。
+	service := newStatsService(t, store, &fakeStatsFetcher{}, fakeStatsOwnership{owned: true})
+
+	// rows、err 是分组读取结果与错误；引用刻意包含空账号、空商品与未抓取商品。
+	rows, err := service.ListItemStatsForItems(context.Background(), []ItemStatsRef{
+		{CookieID: "acc1", ItemID: "i1"},
+		{CookieID: "acc2", ItemID: "i1"},
+		{CookieID: " ", ItemID: "i1"},
+		{CookieID: "acc1", ItemID: " "},
+		{CookieID: "acc1", ItemID: "i-missing"},
+	})
+	if err != nil {
+		t.Fatalf("分组读取统计不应报错: %v", err)
+	}
+	if len(rows) != 2 || rows[ItemStatsKey("acc1", "i1")].BrowseCnt != 11 || rows[ItemStatsKey("acc2", "i1")].BrowseCnt != 22 {
+		t.Fatalf("分组读取结果不符: %+v", rows)
+	}
+	// ok 表示该账号下的该商品是否有统计；未抓取商品必须为 false。
+	if _, ok := rows[ItemStatsKey("acc1", "i-missing")]; ok {
+		t.Fatal("未抓取商品不应出现在分组结果中")
+	}
+	if !rows[ItemStatsKey("acc1", "i1")].Fresh {
+		t.Fatalf("分组读取也必须标注新鲜度: %+v", rows[ItemStatsKey("acc1", "i1")])
+	}
+
+	// 查询失败必须显式暴露。
+	// listErr 是注入的分组查询失败。
+	listErr := errors.New("分组查询失败")
+	// failService 是查询失败用例服务。
+	failService := newStatsService(t, &accountAwareStatsStore{listErr: listErr}, &fakeStatsFetcher{}, fakeStatsOwnership{owned: true})
+	// failErr 是分组查询失败返回的错误。
+	if _, failErr := failService.ListItemStatsForItems(context.Background(), []ItemStatsRef{{CookieID: "acc1", ItemID: "i1"}}); !errors.Is(failErr, listErr) {
+		t.Fatalf("分组查询失败应显式暴露，实际 %v", failErr)
+	}
+}
