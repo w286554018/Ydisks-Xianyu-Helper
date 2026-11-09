@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SSH 反向隧道 LaunchAgent 模板。
+  由 install-autostart.sh 渲染：__HOME__、__SSH_KEY__、__SERVER_HOST__、__SERVER_PORT__、__REMOTE_PORT__。
+  作用：把家用机回环上的助手端口（__REMOTE_PORT__）反向映射到服务器的 127.0.0.1:__REMOTE_PORT__，
+  供服务器侧应用容器经中继访问。隧道断开时应用会立即返回 503（设计行为），本服务负责自动重连。
+-->
+<plist version="1.0">
+<dict>
+    <!-- Label 是服务标识，需与 plist 文件名一致。 -->
+    <key>Label</key>
+    <string>com.ydisks.local-fetch-tunnel</string>
+
+    <!-- ProgramArguments 是反向隧道命令；BatchMode 保证任何情况下都不会弹出交互提示。 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/ssh</string>
+        <string>-N</string>
+        <string>-o</string>
+        <string>BatchMode=yes</string>
+        <string>-o</string>
+        <string>ExitOnForwardFailure=yes</string>
+        <string>-o</string>
+        <string>ServerAliveInterval=20</string>
+        <string>-o</string>
+        <string>ServerAliveCountMax=3</string>
+        <string>-o</string>
+        <string>TCPKeepAlive=yes</string>
+        <string>-o</string>
+        <string>StrictHostKeyChecking=accept-new</string>
+        <string>-i</string>
+        <string>__SSH_KEY__</string>
+        <string>-p</string>
+        <string>__SERVER_PORT__</string>
+        <string>-R</string>
+        <string>__REMOTE_PORT__:127.0.0.1:__REMOTE_PORT__</string>
+        <string>root@__SERVER_HOST__</string>
+    </array>
+
+    <!-- RunAtLoad 表示登录即建立隧道；KeepAlive 表示断开后自动重建。 -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- ThrottleInterval 限制重连频率；端口被占用时不会高频重试。 -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- 标准输出与错误分别落盘，便于排查；日志不含任何凭据。 -->
+    <key>StandardOutPath</key>
+    <string>__HOME__/.ydisks-fetch/logs/tunnel.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.ydisks-fetch/logs/tunnel.err.log</string>
+</dict>
+</plist>

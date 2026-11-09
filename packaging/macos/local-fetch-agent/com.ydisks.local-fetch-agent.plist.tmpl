@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  本机抓取助手的 LaunchAgent 模板。
+  由 install-autostart.sh 渲染：__HOME__ 替换为用户主目录。
+  助手只监听回环 127.0.0.1:17901，不对外暴露；令牌与专用浏览器 profile 均在用户主目录下。
+-->
+<plist version="1.0">
+<dict>
+    <!-- Label 是服务标识，需与 plist 文件名一致。 -->
+    <key>Label</key>
+    <string>com.ydisks.local-fetch-agent</string>
+
+    <!-- ProgramArguments 是助手可执行文件（已安装到用户主目录下的稳定路径）。 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.ydisks-fetch/bin/local-fetch-agent</string>
+    </array>
+
+    <!-- WorkingDirectory 固定到助手目录，避免继承不确定的当前目录。 -->
+    <key>WorkingDirectory</key>
+    <string>__HOME__/.ydisks-fetch</string>
+
+    <!-- RunAtLoad 表示登录即启动；KeepAlive 表示异常退出后自动重启。 -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- ThrottleInterval 限制重启频率，避免端口冲突时高频重启。 -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- 标准输出与错误分别落盘，便于排查；日志不含任何凭据。 -->
+    <key>StandardOutPath</key>
+    <string>__HOME__/.ydisks-fetch/logs/agent.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.ydisks-fetch/logs/agent.err.log</string>
+</dict>
+</plist>
