@@ -142,7 +142,31 @@
 - `internal/composition/runtime/runtime.go` 拆出 `runtime_service_ports.go`（订单补偿协调器 + 数据库健康端口）。
 - `internal/server/item_handlers.go` 的列表统计辅助函数移到 `item_stats_handlers.go`。
 
-### 待完成
+### 阶段 5：前端（完成）
 
-- 阶段 5：前端（两列 + 悬浮 + 行内刷新 + 工具栏「刷新本页」）与其行为测试。
-- 阶段 6：门禁/覆盖率/部署/线上四项实测/推送。
+- `api.ts` 新增 `refreshItemStats` / `refreshStatsBatch` 与 `statsRefreshErrorMessage`（后者放在 API 适配层，
+  因为只有适配器可以引用共享 HTTP 错误类型）；`models.ts` 新增 `ItemStats`/`ItemStatsBatchResult` 与 `Item.stats`。
+- 新增 `stats.ts`（纯函数：索引键、相对时间文案、悬浮文案、就地合并、可刷新计数、批量结果提示）。
+- 新增 `hooks.ts` 的 `useItemStatsRefresh`：单行刷新按「账号 + 商品」就地更新、批量刷新用代次守卫防止
+  旧响应覆盖新结果、卸载后不再写入状态。
+- `ItemTable.tsx` 在「价格」后插入「浏览」「想要」两列（悬浮「收藏 N · 已售 N · 更新于 X 前」）与行内刷新按钮；
+  `ItemList.tsx` 工具栏新增「刷新本页」（含可刷新数量提示与结果提示）。
+- 测试：`stats.test.ts`（纯函数）、`statsRefresh.test.tsx`（成功/失败/风控停止/旧响应不覆盖/卸载/空集合）。
+
+### 阶段 6：门禁、覆盖率与上线（完成）
+
+- 门禁：`go build`、`go vet`、`architecturecheck`、Go 与前端 `commentlint`、`make api-check` 五段全部通过。
+- 全量测试：`go test ./... -p 1` 全绿（并行会因 4 个重型包抢占 CPU 而长时间不收敛，必须串行）；
+  前端 `typecheck` + 140 个测试文件 / 877 个用例全通过。
+- 覆盖率：Go `go test ./... -coverprofile` = 89.09%，叠加 `RUN_BROWSER_INTEGRATION=1`（`internal/browser`
+  由 35.9% 提升到 62.1%）合计 **90.97%**；前端 `test:coverage` = **90.58%** statements。
+- 上线：提交 `2c3c251` → `9519f40` → `45902fe`，镜像 `local-2c3c251` → `local-9519f40` → `local-45902fe`，
+  生产 Postgres 迁移到 00064；`/health` 的 version/commit 与仓库 HEAD 一致。
+- 线上实测（`https://xianyu.fishtrip.net`，admin 会话）：
+  1. 列表附带 `stats`：8 件商品中 5 件有统计、其余为 `null`；
+  2. 单个刷新 200 / 2.8 秒，`browse_cnt` 随平台实时变化（31 → 32 → 35）；
+  3. 批量刷新 200 / 2.5 秒，24 小时内已抓取的商品被跳过（`skipped=2`）、`remaining` 正确；
+  4. 助手侧风控：真实命中过 409「闲鱼要求人机验证」，提示可操作且不重试（符合冻结规范）。
+- 关键运维事实：**本机抓取助手必须使用包含四个计数字段的二进制**；旧助手只返回标题/价格/描述，
+  会导致统计全部落库为 0。已用 `go build ./cmd/local-fetch-agent` 重装到
+  `~/.ydisks-fetch/bin/local-fetch-agent` 并 `launchctl kickstart -k gui/501/com.ydisks.local-fetch-agent` 重启。
