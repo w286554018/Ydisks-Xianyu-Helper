@@ -9129,6 +9129,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 市场情报模型调用失败（统一错误响应，未配置时为 400）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/market-intel/items/{item_id}/analyze":
     post:
       operationId: postApiV1MarketIntelItemsItemIdAnalyze
@@ -9161,6 +9167,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 市场情报模型调用失败（统一错误响应，未配置时为 400）
           content:
             application/json:
               schema:

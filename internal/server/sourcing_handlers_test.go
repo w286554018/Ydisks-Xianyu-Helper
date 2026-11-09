@@ -271,6 +271,10 @@ type fakeMarketIntelPort struct {
 	scanResult marketintel.ScanResult
 	// carryErr 是搬运触发的返回错误。
 	carryErr error
+	// rewriteErr 是 AI 改写触发的返回错误。
+	rewriteErr error
+	// analyzeErr 是卖点分析触发的返回错误。
+	analyzeErr error
 }
 
 // ListKeywords 返回固定词表。
@@ -320,13 +324,19 @@ func (f *fakeMarketIntelPort) GetCompetitorDetail(_ context.Context, itemID stri
 	return marketintel.CompetitorDetail{ItemID: itemID, Title: "AI课程代做", Price: "99", DescText: "专业代做", Images: []string{"http://127.0.0.1:1/unreachable.jpg"}, SellerNickname: "卖家甲", SellerID: "u1"}, nil
 }
 
-// RewriteCompetitorCopy 返回固定改写结果。
+// RewriteCompetitorCopy 返回固定改写结果或注入的错误。
 func (f *fakeMarketIntelPort) RewriteCompetitorCopy(context.Context, string, string) (marketintel.RewrittenCopy, error) {
+	if f.rewriteErr != nil {
+		return marketintel.RewrittenCopy{}, f.rewriteErr
+	}
 	return marketintel.RewrittenCopy{Title: "AI课程辅导定制", Desc: "一对一辅导"}, nil
 }
 
-// AnalyzeCompetitorSellingPoints 返回固定分析。
+// AnalyzeCompetitorSellingPoints 返回固定分析或注入的错误。
 func (f *fakeMarketIntelPort) AnalyzeCompetitorSellingPoints(context.Context, string, string, string, string) (string, error) {
+	if f.analyzeErr != nil {
+		return "", f.analyzeErr
+	}
 	return "核心卖点：定制化；文案套路：价格锚点", nil
 }
 

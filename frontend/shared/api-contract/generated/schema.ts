@@ -17575,6 +17575,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description 市场情报模型调用失败（统一错误响应，未配置时为 400） */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     postApiV1MarketIntelItemsItemIdAnalyze: {
@@ -17617,6 +17626,15 @@ export interface operations {
             };
             /** @description 统一错误响应 */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 市场情报模型调用失败（统一错误响应，未配置时为 400） */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

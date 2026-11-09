@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	marketintel "xianyu-go/internal/application/marketintel"
@@ -252,4 +253,60 @@ func TestMarketIntelDetailEndpointsContract(t *testing.T) {
 	// 词商品列表成功。
 	recorder, request = marketIntelRequest(handler, cookie, http.MethodGet, "/api/v1/market-intel/keywords/AI%E8%AF%BE%E7%A8%8B/items", "")
 	assertOpenAPISuccessResponse(t, request, recorder)
+}
+
+// TestMarketIntelAIErrorMapping 验证 AI 改写/分析的失败映射：
+// 未配置返回 400 + ai_not_configured；其它模型故障返回 503 + ai_unavailable 且不透传内部错误文本。
+func TestMarketIntelAIErrorMapping(t *testing.T) {
+	// srv、cleanup 是测试 Server 与清理函数。
+	srv, _, cleanup := newTestServer(t)
+	defer cleanup()
+	// handler 是真实路由；cookie 是管理员会话。
+	handler := srv.Router()
+	// cookie 是登录会话。
+	cookie := loginHelper(t, handler)
+	// fake 是可注入错误的市场情报替身。
+	fake := &fakeMarketIntelPort{}
+	srv.applications.marketIntel = fake
+
+	// cases 是两个 AI 端点。
+	cases := []struct {
+		// path 是端点路径。
+		path string
+	}{
+		{path: "/api/v1/market-intel/items/i1/rewrite"},
+		{path: "/api/v1/market-intel/items/i1/analyze"},
+	}
+	// 未配置模型：两个端点都必须返回 400 与稳定错误码。
+	fake.rewriteErr = marketintel.ErrAINotConfigured
+	fake.analyzeErr = marketintel.ErrAINotConfigured
+	// tc 是当前用例。
+	for _, tc := range cases {
+		// recorder、_ 是响应记录器与请求。
+		recorder, _ := marketIntelRequest(handler, cookie, http.MethodPost, tc.path, "")
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("%s 未配置模型应返回 400，实际 %d", tc.path, recorder.Code)
+		}
+		if !strings.Contains(recorder.Body.String(), "ai_not_configured") {
+			t.Fatalf("%s 应返回 ai_not_configured，实际 %s", tc.path, recorder.Body.String())
+		}
+	}
+
+	// 普通模型故障：必须返回 503，且响应不得透传上游错误文本。
+	fake.rewriteErr = errors.New("上游模型返回 401：secret-token-abc")
+	fake.analyzeErr = errors.New("上游模型返回 401：secret-token-abc")
+	// failureCase 是当前用例。
+	for _, failureCase := range cases {
+		// recorder、_ 是响应记录器与请求。
+		recorder, _ := marketIntelRequest(handler, cookie, http.MethodPost, failureCase.path, "")
+		if recorder.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s 模型故障应返回 503，实际 %d", failureCase.path, recorder.Code)
+		}
+		if !strings.Contains(recorder.Body.String(), "ai_unavailable") {
+			t.Fatalf("%s 应返回 ai_unavailable，实际 %s", failureCase.path, recorder.Body.String())
+		}
+		if strings.Contains(recorder.Body.String(), "secret-token-abc") {
+			t.Fatal("响应不得透传上游错误文本")
+		}
+	}
 }

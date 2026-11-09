@@ -113,10 +113,22 @@ func (s *Server) marketIntelItemRewrite(w http.ResponseWriter, r *http.Request) 
 	// rewritten 是 AI 改写结果。
 	rewritten, rewriteErr := svc.RewriteCompetitorCopy(r.Context(), detail.Title, detail.DescText)
 	if rewriteErr != nil {
-		writeErr(w, http.StatusInternalServerError, rewriteErr.Error())
+		s.writeMarketIntelAIError(w, itemID, rewriteErr)
 		return
 	}
 	writeJSON(w, http.StatusOK, marketIntelRewriteResponse{Title: rewritten.Title, Desc: rewritten.Desc})
+}
+
+// writeMarketIntelAIError 把 AI 改写/分析的失败映射为统一错误信封。
+// 未配置（可自行修复）返回 400；其余失败返回 503 并留下可诊断日志，避免模型侧故障被当成内部错误。
+func (s *Server) writeMarketIntelAIError(w http.ResponseWriter, itemID string, err error) {
+	if errors.Is(err, marketintel.ErrAINotConfigured) {
+		writeErrCode(w, http.StatusBadRequest, "ai_not_configured", marketintel.ErrAINotConfigured.Error(), "")
+		return
+	}
+	// 未归类错误必须留下可诊断日志，否则模型侧故障线上不可见；logsafe.Error 不含任何凭据明文。
+	s.Logger.Warn("市场情报模型调用失败", "item_id", itemID, "err", logsafe.Error(err))
+	writeErrCode(w, http.StatusServiceUnavailable, "ai_unavailable", "市场情报模型调用失败，请检查模型配置与额度", "")
 }
 
 // marketIntelItemAnalyze 用 AI 分析竞品卖点。
@@ -137,7 +149,7 @@ func (s *Server) marketIntelItemAnalyze(w http.ResponseWriter, r *http.Request) 
 	// analysis 是 AI 分析结果。
 	analysis, analyzeErr := svc.AnalyzeCompetitorSellingPoints(r.Context(), detail.Title, detail.DescText, detail.Price, detail.WantCountText)
 	if analyzeErr != nil {
-		writeErr(w, http.StatusInternalServerError, analyzeErr.Error())
+		s.writeMarketIntelAIError(w, itemID, analyzeErr)
 		return
 	}
 	writeJSON(w, http.StatusOK, marketIntelAnalyzeResponse{Analysis: analysis})

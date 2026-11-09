@@ -153,6 +153,15 @@ func TestMarketIntelRewriteCopyUnconfigured(t *testing.T) {
 	if _, analyzeErr := port.AnalyzeSellingPoints(context.Background(), "标题", "描述", "9.9", "10人想要"); analyzeErr == nil {
 		t.Fatal("未配置密钥应返回错误")
 	}
+	// 未配置必须包装应用层哨兵，否则传输层无法把它与「模型调用失败」区分开。
+	if // rewriteErr 是改写错误，必须可被 errors.Is 识别为未配置。
+	_, rewriteErr := port.RewriteCopy(context.Background(), "标题", "描述"); !errors.Is(rewriteErr, marketintel.ErrAINotConfigured) {
+		t.Fatalf("改写未配置错误必须包装 ErrAINotConfigured，实际 %v", rewriteErr)
+	}
+	if // analyzeSentinelErr 是卖点分析错误，必须同样可识别。
+	_, analyzeSentinelErr := port.AnalyzeSellingPoints(context.Background(), "标题", "描述", "9.9", "10人想要"); !errors.Is(analyzeSentinelErr, marketintel.ErrAINotConfigured) {
+		t.Fatalf("卖点分析未配置错误必须包装 ErrAINotConfigured，实际 %v", analyzeSentinelErr)
+	}
 }
 
 // TestMarketIntelAnalyzeSellingPoints 验证卖点分析透传模型正文。

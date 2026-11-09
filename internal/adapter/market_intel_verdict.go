@@ -216,7 +216,8 @@ func (p *MarketIntelVerdictPort) loadConfig(ctx context.Context) (marketIntelMod
 	// apiKey 是受控读取的密钥；读取失败或为空都视为未配置。
 	apiKey, keyErr := p.store.ReadSensitiveSetting(ctx, p.userID, SettingMarketIntelAPIKey, "settings.use", "market_intel_verdict")
 	if keyErr != nil || strings.TrimSpace(apiKey) == "" {
-		return marketIntelModelConfig{}, errors.New("市场情报模型未配置，请在设置页填写 API Key")
+		// 必须包装应用层的未配置哨兵，否则传输层无法把它与「模型调用失败」区分开。
+		return marketIntelModelConfig{}, marketintel.ErrAINotConfigured
 	}
 	return marketIntelModelConfig{baseURL: baseURL, model: model, apiKey: apiKey}, nil
 }
