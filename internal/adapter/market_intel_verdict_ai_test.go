@@ -254,3 +254,38 @@ func TestMarketIntelJudgeBatchSuccess(t *testing.T) {
 		t.Fatalf("次条判定不符: %+v", results[1])
 	}
 }
+
+// TestMarketIntelRewriteCopyWithWrappedEnvelope 验证网关把响应包一层 data 时仍能解析成功。
+// 线上实测：自建网关返回 {"data":{"choices":[...]}}，按顶层读取会误判为「返回空结果」。
+func TestMarketIntelRewriteCopyWithWrappedEnvelope(t *testing.T) {
+	// harness 是返回 data 包装响应的端口装配。
+	harness := newMarketIntelVerdictHarness(t, func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"choices":[{"message":{"content":"{\"title\":\"包装标题\",\"desc\":\"包装描述\"}"}}],"id":"gen-1"}}`))
+	})
+	// rewritten、err 是改写结果与错误。
+	rewritten, err := harness.port.RewriteCopy(context.Background(), "竞品标题", "竞品描述")
+	if err != nil {
+		t.Fatalf("data 包装响应应能解析成功，实际错误: %v", err)
+	}
+	if rewritten.Title != "包装标题" || rewritten.Desc != "包装描述" {
+		t.Fatalf("改写结果不符: %+v", rewritten)
+	}
+}
+
+// TestMarketIntelAnalyzeSellingPointsWithWrappedEnvelope 验证卖点分析同样兼容 data 包装响应。
+func TestMarketIntelAnalyzeSellingPointsWithWrappedEnvelope(t *testing.T) {
+	// harness 是返回 data 包装响应的端口装配。
+	harness := newMarketIntelVerdictHarness(t, func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"choices":[{"message":{"content":"核心卖点：包装解析"}}]}}`))
+	})
+	// analysis、err 是分析结果与错误。
+	analysis, err := harness.port.AnalyzeSellingPoints(context.Background(), "标题", "描述", "9.9", "10人想要")
+	if err != nil {
+		t.Fatalf("data 包装响应应能解析成功，实际错误: %v", err)
+	}
+	if !strings.Contains(analysis, "包装解析") {
+		t.Fatalf("分析结果不符: %q", analysis)
+	}
+}

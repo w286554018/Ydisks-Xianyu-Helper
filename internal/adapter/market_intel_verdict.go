@@ -176,7 +176,8 @@ func (p *MarketIntelVerdictPort) JudgeBatch(ctx context.Context, keyword string,
 	// payload 是解析后的兼容响应。
 	var payload marketIntelChatResponse
 	// decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON。
-	if decodeErr := json.Unmarshal(raw, &payload); decodeErr != nil {
+	if // decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON（含被网关包一层的情况）。
+	decodeErr := json.Unmarshal(unwrapChatResponseEnvelope(raw), &payload); decodeErr != nil {
 		return nil, errors.New("市场情报模型返回了无法解析的响应")
 	}
 	if len(payload.Choices) == 0 {
@@ -367,7 +368,8 @@ func (p *MarketIntelVerdictPort) chatCompletion(ctx context.Context, cfg marketI
 	// payload 是解析后的兼容响应。
 	var payload marketIntelChatResponse
 	// decodeErr 表示响应不是可解析 JSON。
-	if decodeErr := json.Unmarshal(raw, &payload); decodeErr != nil {
+	if // decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON（含被网关包一层的情况）。
+	decodeErr := json.Unmarshal(unwrapChatResponseEnvelope(raw), &payload); decodeErr != nil {
 		return "", errors.New("市场情报模型返回了无法解析的响应")
 	}
 	if len(payload.Choices) == 0 {

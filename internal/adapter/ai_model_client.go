@@ -299,7 +299,8 @@ func extractChatReply(raw []byte) (string, error) {
 	// payload、decodeErr 分别保存解析后的兼容响应及 JSON 格式错误。
 	var payload aiChatCompletionResponse
 	// decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON。
-	if decodeErr := json.Unmarshal(raw, &payload); decodeErr != nil {
+	if // decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON（含被网关包一层的情况）。
+	decodeErr := json.Unmarshal(unwrapChatResponseEnvelope(raw), &payload); decodeErr != nil {
 		return "", fmt.Errorf("AI 服务返回了无法解析的响应")
 	}
 	if len(payload.Choices) == 0 {
