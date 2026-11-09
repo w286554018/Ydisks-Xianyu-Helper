@@ -219,6 +219,7 @@ func ServerDependencies(services *composition.Services, base HTTPDependencies, s
 			ItemBatchPreviewPersistence: ports.ItemBatchPreviewPersistence, ItemBatchLocalPublish: ports.ItemBatchLocalPublish,
 			ItemCopyPublish: ports.ItemCopyPublish,
 			ItemLifecycle:   itemLifecycleTransport{service: ports.ItemLifecycle, root: services.LifecycleContext},
+			ItemStats:       ports.ItemStats,
 			ItemSync:        ports.ItemSync, ItemCatalog: ports.ItemCatalog, ItemCatalogMutation: ports.ItemCatalogMutation, ItemAISettings: ports.ItemAISettings,
 			AccountLogin:        accountLoginTransport{service: ports.AccountLogin},
 			QRLogin:             qrLoginTransport{service: ports.QRLogin},

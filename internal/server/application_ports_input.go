@@ -14,7 +14,9 @@ type ApplicationPortsInput struct {
 	ItemBatchLocalPublish       ItemBatchLocalPublishPort
 	ItemCopyPublish             ItemCopyPublishPort
 	// ItemLifecycle 是商品平台下架/删除用例。
-	ItemLifecycle          ItemLifecyclePort
+	ItemLifecycle ItemLifecyclePort
+	// ItemStats 是我的商品统计刷新与读取用例。
+	ItemStats              ItemStatsPort
 	ItemSync               ItemSyncPort
 	ItemCatalog            ItemCatalogPort
 	ItemCatalogMutation    ItemCatalogMutationPort
@@ -66,6 +68,7 @@ func NewApplicationPorts(input ApplicationPortsInput) *ApplicationPorts {
 		itemBatchPreviewPersistence: input.ItemBatchPreviewPersistence, itemBatchLocalPublish: input.ItemBatchLocalPublish,
 		itemCopyPublish: input.ItemCopyPublish,
 		itemLifecycle:   input.ItemLifecycle,
+		itemStats:       input.ItemStats,
 		itemSync:        input.ItemSync, itemCatalog: input.ItemCatalog, itemCatalogMutation: input.ItemCatalogMutation, itemAISettings: input.ItemAISettings,
 		accountLogin: input.AccountLogin, qrLogin: input.QRLogin, sessionRecovery: input.SessionRecovery,
 		platformCredentials: input.PlatformCredentials, authentication: input.Authentication, loginAudit: input.LoginAudit,

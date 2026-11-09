@@ -13,6 +13,7 @@ import (
 
 	"xianyu-go/internal/account"
 	"xianyu-go/internal/adapter"
+	itemapp "xianyu-go/internal/application/items"
 	lifecycleapp "xianyu-go/internal/application/lifecycle"
 	orderapp "xianyu-go/internal/application/orders"
 	"xianyu-go/internal/auth"
@@ -240,6 +241,15 @@ func newTestServerFromComposition(authentication *auth.Service, manager *account
 	})
 	// applicationsErr 表示测试组合根装配应用服务失败的原因。
 	var applicationsErr error
+	// itemStatsService、itemStatsErr 是测试用的商品统计服务与构造错误；抓取端口刻意指向
+	// 未配置的助手客户端，使服务器测试不访问真实本机助手，并覆盖 503「助手不可用」路径。
+	itemStatsService, itemStatsErr := itemapp.NewItemStatsService(
+		adapter.NewItemStatsStore(itemDependencies.Store()),
+		adapter.NewLocalFetchAgentClient("", "", nil),
+		adapter.NewItemBatchPreviewPort(itemDependencies.Store()))
+	if itemStatsErr != nil {
+		return nil, itemStatsErr
+	}
 	applications, applicationsErr = composition.New(composition.Dependencies{
 		OrderDependencies:           orderDependencies,
 		AccountDependencies:         accountDependencies,
@@ -258,6 +268,7 @@ func newTestServerFromComposition(authentication *auth.Service, manager *account
 		UpdateRunningCookie:         updateRunningCookie,
 		SessionRecovery:             sessionRecovery,
 		LifecycleContext:            lifecycleCoordinator.Context,
+		ItemStats:                   itemStatsService,
 	})
 	if applicationsErr != nil {
 		return nil, applicationsErr
@@ -365,7 +376,8 @@ func testServerDependencies(authentication *auth.Service, databaseHealth Databas
 		Orders: testOrdersTransport{services: ports.Orders}, OrderRefreshJobs: testOrderRefreshJobsTransport{service: ports.OrderRefreshJobs}, ItemSinglePublish: ports.ItemSinglePublish,
 		ItemBatchPreview: ports.ItemBatchPreview, ItemBatchManagement: ports.ItemBatchManagement, ItemCategoryRecommendation: ports.ItemCategoryRecommendation,
 		ItemBatchPreviewPersistence: ports.ItemBatchPreviewPersistence, ItemBatchLocalPublish: ports.ItemBatchLocalPublish,
-		ItemSync: ports.ItemSync, ItemCatalog: ports.ItemCatalog, ItemCatalogMutation: ports.ItemCatalogMutation, ItemAISettings: ports.ItemAISettings,
+		ItemStats: ports.ItemStats,
+		ItemSync:  ports.ItemSync, ItemCatalog: ports.ItemCatalog, ItemCatalogMutation: ports.ItemCatalogMutation, ItemAISettings: ports.ItemAISettings,
 		AccountLogin: testAccountLoginAdapter{service: ports.AccountLogin}, QRLogin: testQRLoginAdapter{service: ports.QRLogin},
 		SessionRecovery: testSessionRecoveryAdapter{handler: sessionRecovery}, PlatformCredentials: ports.PlatformCredentials,
 		Authentication: ports.Authentication, LoginAudit: ports.LoginAudit, PasswordLogin: ports.PasswordLogin, AccountDelete: ports.AccountDelete,

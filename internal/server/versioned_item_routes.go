@@ -27,6 +27,8 @@ func (s *Server) mountVersionedItems(r chi.Router) {
 		r.Get("/api/v1/items/lifecycle-batches/{batch_id}", s.getItemLifecycleBatch)
 		r.Post("/api/v1/items/lifecycle-batches/{batch_id}/retry-failed", s.retryItemLifecycleBatch)
 		r.Post("/api/v1/items/lifecycle-batches/{batch_id}/cancel", s.cancelItemLifecycleBatch)
+		r.Post("/api/v1/items/stats/refresh-batch", s.refreshItemStatsBatch)
+		r.Post("/api/v1/items/{cookie_id}/{item_id}/stats/refresh", s.refreshItemStats)
 		r.Put("/api/v1/items/{cookie_id}/{item_id}/multi-spec", s.setItemMultiSpec)
 		r.Put("/api/v1/items/{cookie_id}/{item_id}/multi-quantity-delivery", s.setItemMultiQuantity)
 	})

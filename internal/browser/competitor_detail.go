@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +48,14 @@ type CompetitorDetail struct {
 	SellerID string
 	// WantCountText 是想要人数文本。
 	WantCountText string
+	// BrowseCount 是商品浏览量；平台未提供该字段时为 0。
+	BrowseCount int64
+	// WantCount 是商品想要人数；平台未提供该字段时为 0。
+	WantCount int64
+	// CollectCount 是商品收藏数；平台未提供该字段时为 0。
+	CollectCount int64
+	// SoldCount 是商品已售数；平台未提供该字段时为 0。
+	SoldCount int64
 }
 
 // competitorDetailPayload 是详情接口响应的最小解析结构。
@@ -72,6 +82,14 @@ type competitorDetailPayload struct {
 				// URL 是图片地址。
 				URL string `json:"url"`
 			} `json:"imageInfos"`
+			// BrowseCnt 是浏览量文本；兼容字符串与数字两种返回形态。
+			BrowseCnt flexString `json:"browseCnt"`
+			// WantCnt 是想要人数文本；兼容字符串与数字两种返回形态。
+			WantCnt flexString `json:"wantCnt"`
+			// CollectCnt 是收藏数文本；兼容字符串与数字两种返回形态。
+			CollectCnt flexString `json:"collectCnt"`
+			// SoldCnt 是已售数文本；兼容字符串与数字两种返回形态。
+			SoldCnt flexString `json:"soldCnt"`
 		} `json:"itemDO"`
 		// SellerDO 是卖家信息。
 		SellerDO struct {
@@ -110,6 +128,30 @@ func (f *flexString) UnmarshalJSON(data []byte) error {
 	}
 	*f = flexString(trimmed)
 	return nil
+}
+
+// parseFlexCount 把接口返回的计数文本解析为非负整数。
+// 空值、负数与非法文本一律按 0 处理：对本功能而言「平台未提供」与「确实是 0」的展示结果相同，
+// 都不会造成误导，也不会因为个别字段形态差异而让整段详情解析失败。
+func parseFlexCount(raw flexString) int64 {
+	// trimmed 是去空白后的计数文本。
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return 0
+	}
+	if // intValue、intErr 是按整数解析的结果与错误；平台绝大多数情况下直接给整数。
+	intValue, intErr := strconv.ParseInt(trimmed, 10, 64); intErr == nil {
+		if intValue < 0 {
+			return 0
+		}
+		return intValue
+	}
+	// floatValue、floatErr 是按浮点解析的结果与错误，用于容忍「22.0」一类写法。
+	floatValue, floatErr := strconv.ParseFloat(trimmed, 64)
+	if floatErr != nil || math.IsNaN(floatValue) || math.IsInf(floatValue, 0) || floatValue < 0 {
+		return 0
+	}
+	return int64(floatValue)
 }
 
 // CompetitorItemDetail 打开竞品商品详情页并拦截页面自发的详情接口响应。
@@ -307,6 +349,10 @@ func buildCompetitorDetail(itemID string, captured competitorDetailPayload) Comp
 		DescText:       stripHTMLTags(captured.Data.ItemDO.Desc),
 		SellerID:       strings.TrimSpace(string(captured.Data.SellerDO.SellerID)),
 		SellerNickname: sellerNick,
+		BrowseCount:    parseFlexCount(captured.Data.ItemDO.BrowseCnt),
+		WantCount:      parseFlexCount(captured.Data.ItemDO.WantCnt),
+		CollectCount:   parseFlexCount(captured.Data.ItemDO.CollectCnt),
+		SoldCount:      parseFlexCount(captured.Data.ItemDO.SoldCnt),
 	}
 	// pricePart 拼接分段价格文本。
 	var pricePart strings.Builder

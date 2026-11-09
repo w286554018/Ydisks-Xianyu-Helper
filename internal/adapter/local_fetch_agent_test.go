@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"xianyu-go/internal/application/items"
 	"xianyu-go/internal/application/marketintel"
 )
 
@@ -204,5 +205,88 @@ func TestLocalFetchAgentUnexpectedStatus(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "must-not-leak") {
 		t.Fatal("错误文本不得透传助手响应体")
+	}
+}
+
+// TestLocalFetchAgentFetchItemStats 验证取统计计数：字段映射完整，且不泄漏令牌。
+func TestLocalFetchAgentFetchItemStats(t *testing.T) {
+	// client、server、logBuf 是被测客户端、模拟助手与日志缓冲。
+	client, server, logBuf := newLocalFetchTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"item_id":"`+localFetchTestItemID+`","title":"我的商品","browse_cnt":22,`+
+			`"want_cnt":2,"collect_cnt":1,"sold_cnt":0}`)
+	})
+	defer server.Close()
+
+	// counts、err 是取到的四项计数与错误。
+	counts, err := client.FetchItemStats(context.Background(), localFetchTestItemID)
+	if err != nil {
+		t.Fatalf("取统计计数不应报错: %v", err)
+	}
+	if counts.BrowseCnt != 22 || counts.WantCnt != 2 || counts.CollectCnt != 1 || counts.SoldCnt != 0 {
+		t.Fatalf("统计计数映射错误: %+v", counts)
+	}
+	if strings.Contains(logBuf.String(), localFetchTestToken) {
+		t.Fatal("日志不得包含共享令牌")
+	}
+}
+
+// TestLocalFetchAgentFetchItemStatsFailureMapping 验证助手失败语义被翻译成商品统计服务自有哨兵，
+// 未归类失败保持原始错误语义，避免把未知故障伪装成「助手不可用」。
+func TestLocalFetchAgentFetchItemStatsFailureMapping(t *testing.T) {
+	// cases 是助手失败响应与期望哨兵的对照表。
+	cases := []struct {
+		// name 是用例名。
+		name string
+		// status 是助手返回的 HTTP 状态码。
+		status int
+		// body 是助手返回的响应体。
+		body string
+		// want 是期望的应用层哨兵。
+		want error
+	}{
+		{name: "风控", status: http.StatusConflict, body: `{"code":"risk_control"}`, want: items.ErrItemStatsRiskControl},
+		{name: "未登录", status: http.StatusConflict, body: `{"code":"not_logged_in"}`, want: items.ErrItemStatsNotLoggedIn},
+		{name: "令牌错误", status: http.StatusUnauthorized, body: `{"code":"unauthorized"}`, want: items.ErrItemStatsUnauthorized},
+		{name: "助手不可用", status: http.StatusServiceUnavailable, body: `{"code":"chrome_unavailable"}`, want: items.ErrItemStatsUnavailable},
+	}
+	// tc 是当前失败映射用例。
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// client、server、_ 是被测客户端、模拟助手与日志缓冲。
+			client, server, _ := newLocalFetchTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = io.WriteString(w, tc.body)
+			})
+			defer server.Close()
+			// counts、gotErr 是本次取统计结果与错误。
+			counts, gotErr := client.FetchItemStats(context.Background(), localFetchTestItemID)
+			if !errors.Is(gotErr, tc.want) {
+				t.Fatalf("期望 %v，实际 %v", tc.want, gotErr)
+			}
+			if counts.BrowseCnt != 0 || counts.WantCnt != 0 {
+				t.Fatalf("失败时不得返回计数: %+v", counts)
+			}
+		})
+	}
+
+	// 未配置地址或令牌时（构造为 nil）必须返回统计服务自有不可用哨兵，而不是市场情报错误。
+	var disabled *LocalFetchAgentClient
+	// disabledCounts、disabledErr 是未启用通道的结果与错误。
+	disabledCounts, disabledErr := disabled.FetchItemStats(context.Background(), localFetchTestItemID)
+	if !errors.Is(disabledErr, items.ErrItemStatsUnavailable) || disabledCounts.BrowseCnt != 0 {
+		t.Fatalf("未配置助手必须返回 ItemStatsUnavailable，实际 %v", disabledErr)
+	}
+
+	// 未归类状态码必须保留原始错误语义，不得被伪装成已知哨兵。
+	// client、server、_ 是被测客户端、模拟助手与日志缓冲。
+	client, server, _ := newLocalFetchTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	defer server.Close()
+	// unknownErr 是未归类状态码返回的错误。
+	_, unknownErr := client.FetchItemStats(context.Background(), localFetchTestItemID)
+	if unknownErr == nil || errors.Is(unknownErr, items.ErrItemStatsUnavailable) {
+		t.Fatalf("未归类失败不应映射为不可用哨兵: %v", unknownErr)
 	}
 }

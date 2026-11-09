@@ -1139,6 +1139,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/stats/refresh-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** postApiV1ItemsStatsRefreshBatch */
+        post: operations["postApiV1ItemsStatsRefreshBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{cookie_id}": {
         parameters: {
             query?: never;
@@ -1221,6 +1238,23 @@ export interface paths {
         /** putApiV1ItemsBycookie_idByitem_idMultiSpec */
         put: operations["putApiV1ItemsBycookie_idByitem_idMultiSpec"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{cookie_id}/{item_id}/stats/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** postApiV1ItemsBycookie_idByitem_idStatsRefresh */
+        post: operations["postApiV1ItemsBycookie_idByitem_idStatsRefresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3451,6 +3485,7 @@ export interface components {
             ai_override: components["schemas"]["ItemAIOverride"];
             /** @enum {string} */
             status?: "active" | "down";
+            stats?: components["schemas"]["ItemStats"] | null;
         };
         ItemListArrayResponse: components["schemas"]["ItemListResponse"][];
         ItemDetailResponse: {
@@ -4501,6 +4536,28 @@ export interface components {
         };
         ItemLifecycleStatusResponse: {
             accepted: boolean;
+        };
+        ItemStats: {
+            cookie_id: string;
+            item_id: string;
+            browse_cnt: number;
+            want_cnt: number;
+            collect_cnt: number;
+            sold_cnt: number;
+            fetched_at: string;
+            fresh: boolean;
+        };
+        ItemStatsBatchRequest: {
+            cookie_id: string;
+            item_ids: string[];
+            limit?: number;
+        };
+        ItemStatsBatchResponse: {
+            refreshed: components["schemas"]["ItemStats"][];
+            skipped: number;
+            remaining: number;
+            stopped: boolean;
+            stop_reason?: string;
         };
     };
     responses: never;
@@ -10391,6 +10448,84 @@ export interface operations {
             };
         };
     };
+    postApiV1ItemsStatsRefreshBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemStatsBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemStatsBatchResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     postApiV1ItemsBycookie_id: {
         parameters: {
             query?: never;
@@ -10929,6 +11064,83 @@ export interface operations {
             };
             /** @description 统一错误响应 */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    postApiV1ItemsBycookie_idByitem_idStatsRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cookie_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemStats"];
+                };
+            };
+            /** @description 统一错误响应 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

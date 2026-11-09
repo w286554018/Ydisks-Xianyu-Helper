@@ -77,6 +77,8 @@ type Services struct {
 	itemCopyPublish             *itemapp.CopyPublishService
 	// itemLifecycle 是商品平台下架/删除服务。
 	itemLifecycle *itemapp.ItemLifecycleService
+	// itemStats 是我的商品统计刷新与读取服务。
+	itemStats *itemapp.ItemStatsService
 	// itemBatchLocalPublish 是远端发布成功后的本地商品与规则收口服务。
 	itemBatchLocalPublish *itemapp.BatchLocalPublishService
 	// itemSync 是商品全量和分页同步应用服务。
@@ -210,6 +212,8 @@ type Dependencies struct {
 	Sourcing *sourcingapp.Service
 	// MarketIntel 是组合根预先装配的市场情报应用服务；为 nil 时对应 HTTP 端点返回功能未启用。
 	MarketIntel *marketintelapp.Service
+	// ItemStats 是组合根预先装配的商品统计服务；为 nil 时对应 HTTP 端点返回功能未启用。
+	ItemStats *itemapp.ItemStatsService
 }
 
 // settingsRuntimeTransport 将账号运行时控制投影给设置用例，并确保启用或 Cookie 重启永远使用进程生命周期 Context。
@@ -342,7 +346,9 @@ type TransportPorts struct {
 	ItemAISettings              *itemapp.ItemAISettingsService
 	ItemCopyPublish             *itemapp.CopyPublishService
 	// ItemLifecycle 是商品平台下架/删除服务。
-	ItemLifecycle          *itemapp.ItemLifecycleService
+	ItemLifecycle *itemapp.ItemLifecycleService
+	// ItemStats 是我的商品统计刷新与读取服务。
+	ItemStats              *itemapp.ItemStatsService
 	AccountLogin           AccountLogin
 	QRLogin                adapter.QRLoginService
 	PlatformCredentials    *accountapp.PlatformCredentialService
@@ -383,29 +389,6 @@ type TransportPorts struct {
 	Admin    *adminapp.Service
 	// RuntimeLogs 是管理员运行日志查询用例。
 	RuntimeLogs *logsapp.Service
-}
-
-// TransportPorts 将 services 中已构造的服务完整投影为 HTTP 层只读端口；可并发读取，nil 接收者返回空集合，调用方不得在运行期替换字段。
-func (services *Services) TransportPorts() TransportPorts {
-	if services == nil {
-		return TransportPorts{}
-	}
-	return TransportPorts{
-		Orders: services.orders, OrderRefreshJobs: services.orderRefreshJobs, ItemSinglePublish: services.itemSinglePublish,
-		ItemBatchPreview: services.itemBatchPreview, ItemBatchManagement: services.itemBatchManagement,
-		ItemCategoryRecommendation: services.itemCategoryRecommendation, ItemBatchPreviewPersistence: services.itemBatchPreviewPersistence,
-		ItemBatchLocalPublish: services.itemBatchLocalPublish, ItemSync: services.itemSync, ItemCatalog: services.itemCatalog,
-		ItemCatalogMutation: services.itemCatalogMutation, ItemAISettings: services.itemAISettings, AccountLogin: services.accountLogin, QRLogin: services.qrLogin,
-		ItemCopyPublish: services.itemCopyPublish, ItemLifecycle: services.itemLifecycle,
-		PlatformCredentials: services.platformCredentials, Authentication: services.authentication, LoginAudit: services.loginAudit,
-		PasswordLogin: services.passwordLogin, AccountDelete: services.accountDelete, AccountProfile: services.accountProfile,
-		AccountLongLogin: services.accountLongLogin, AccountSettings: services.accountSettings, AccountRuntime: services.accountRuntime,
-		AccountSummaries: services.accountSummaries, AccountTasks: services.accountTasks, Chat: services.chat,
-		UncertainNotifications: services.uncertainNotifications, NotificationChannels: services.notificationChannels,
-		Analytics: services.analytics, Sourcing: services.sourcing, MarketIntel: services.marketIntel, MarketIntelCarry: services.marketIntelCarry, AutomationIssues: services.automationIssues, AutomationAudit: services.automationAudit, AutomationRules: services.automationRules, DeliveryTemplates: services.deliveryTemplates,
-		Cards: services.cards, APICardTester: services.apiCardTester, PublishAutomationRules: services.publishAutomationRules, DefaultReplies: services.defaultReplies, ItemGreetings: services.itemGreetings, Library: services.library,
-		Keywords: services.keywords, Settings: services.settings, Admin: services.admin, RuntimeLogs: services.runtimeLogs,
-	}
 }
 
 // accountServiceBundle 保存账号、登录与凭证相关应用服务的构造结果，供 New 一次性注入 Services。
@@ -606,6 +589,7 @@ func New(dependencies Dependencies) (*Services, error) {
 		itemBatchPreviewPersistence: catalogServices.previewPersistence,
 		itemCopyPublish:             catalogServices.copyPublish,
 		itemLifecycle:               catalogServices.lifecycle,
+		itemStats:                   dependencies.ItemStats,
 		itemBatchLocalPublish:       batchServices.localPublish,
 		itemSync: itemapp.NewSyncService(dependencies.ItemDependencies.NewItemSyncRepository(dependencies.MTopClient, dependencies.Logger, dependencies.UpdateRunningCookie, func(ctx context.Context, cookieID string, err error) {
 			if sessionRecovery != nil {

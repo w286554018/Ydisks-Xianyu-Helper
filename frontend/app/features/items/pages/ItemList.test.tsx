@@ -33,6 +33,9 @@ vi.mock('../hooks', /* itemPublishBatchHookMockFactory 提供关闭状态的批�
     openBatchModal: vi.fn(), handleRecommendBatchCategory: vi.fn(), openRecentBatchResult: vi.fn(), handlePreviewBatch: vi.fn(), handleStartBatch: vi.fn(),
     handleCancelBatch: vi.fn(), abandonBatchPreview: vi.fn(), closeBatchModal: vi.fn(), handleRetryBatchFailed: vi.fn(),
   }),
+  useItemStatsRefresh: /* itemStatsRefreshHookMock 返回页面解构所需的稳定统计刷新状态。 */ () => ({
+    refreshingKeys: [], batchRefreshing: false, message: '', refreshOne: vi.fn(), refreshPage: vi.fn(),
+  }),
 }));
 
 vi.mock('../itemActions', /* itemActionsMockFactory 提供关闭状态的商品编辑与发布动作。 */ () => ({

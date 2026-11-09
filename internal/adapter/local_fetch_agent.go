@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"xianyu-go/internal/application/items"
 	"xianyu-go/internal/application/marketintel"
 )
 
@@ -91,6 +93,14 @@ type localFetchDetailResponse struct {
 	SellerNickname string `json:"seller_nickname"`
 	// SellerID 是卖家标识。
 	SellerID string `json:"seller_id"`
+	// BrowseCnt 是商品浏览量。
+	BrowseCnt int64 `json:"browse_cnt"`
+	// WantCnt 是商品想要人数。
+	WantCnt int64 `json:"want_cnt"`
+	// CollectCnt 是商品收藏数。
+	CollectCnt int64 `json:"collect_cnt"`
+	// SoldCnt 是商品已售数。
+	SoldCnt int64 `json:"sold_cnt"`
 }
 
 // localFetchErrorResponse 是助手统一错误结构。
@@ -103,43 +113,10 @@ type localFetchErrorResponse struct {
 
 // FetchCompetitorDetail 调用本机助手抓取详情，并把失败映射为应用层场景错误。
 func (c *LocalFetchAgentClient) FetchCompetitorDetail(ctx context.Context, itemID string) (marketintel.CompetitorDetail, error) {
-	if c == nil {
-		return marketintel.CompetitorDetail{}, marketintel.ErrLocalFetchUnavailable
-	}
-	// payload 是取详情请求体；只发送 item_id，助手自行拼接商品页地址。
-	payload, marshalErr := json.Marshal(map[string]string{"item_id": itemID})
-	if marshalErr != nil {
-		return marketintel.CompetitorDetail{}, fmt.Errorf("构造本机抓取请求失败: %w", marshalErr)
-	}
-	// request 是取详情请求；err 表示请求构造失败。
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(payload))
+	// detail、err 是助手返回的原始详情与错误。
+	detail, err := c.fetchLocalDetail(ctx, itemID)
 	if err != nil {
-		return marketintel.CompetitorDetail{}, fmt.Errorf("构造本机抓取请求失败: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set(localFetchTokenHeader, c.token)
-
-	// response 是助手响应；doErr 表示网络层失败（助手未启动、隧道断开等）。
-	response, doErr := c.httpClient.Do(request)
-	if doErr != nil {
-		c.logger.Warn("本机抓取助手不可达", "item_id", itemID)
-		return marketintel.CompetitorDetail{}, fmt.Errorf("%w: 连接助手失败", marketintel.ErrLocalFetchUnavailable)
-	}
-	defer func() { _ = response.Body.Close() }()
-	// body 是响应正文。
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, localFetchMaxBodyBytes))
-	if readErr != nil {
-		return marketintel.CompetitorDetail{}, fmt.Errorf("%w: 读取助手响应失败", marketintel.ErrLocalFetchUnavailable)
-	}
-	if response.StatusCode != http.StatusOK {
-		return marketintel.CompetitorDetail{}, c.mapLocalFetchFailure(itemID, response.StatusCode, body)
-	}
-	// detail 是解析后的详情。
-	var detail localFetchDetailResponse
-	if // decodeErr 是助手响应解析失败原因。
-	decodeErr := json.Unmarshal(body, &detail); decodeErr != nil {
-		c.logger.Warn("本机抓取助手响应解析失败", "item_id", itemID)
-		return marketintel.CompetitorDetail{}, fmt.Errorf("解析助手响应失败: %w", decodeErr)
+		return marketintel.CompetitorDetail{}, err
 	}
 	return marketintel.CompetitorDetail{
 		ItemID:         itemID,
@@ -150,6 +127,84 @@ func (c *LocalFetchAgentClient) FetchCompetitorDetail(ctx context.Context, itemI
 		SellerNickname: detail.SellerNickname,
 		SellerID:       detail.SellerID,
 	}, nil
+}
+
+// FetchItemStats 读取自己商品详情返回的公开计数（浏览量/想要量/收藏/已售）。
+// 与竞品详情共用同一通道与超时语义；错误在此翻译成商品统计服务自有哨兵，
+// 使商品统计用例不必反向依赖市场情报包。
+func (c *LocalFetchAgentClient) FetchItemStats(ctx context.Context, itemID string) (items.ItemStatsCounts, error) {
+	// detail、err 是助手返回的原始详情与错误。
+	detail, err := c.fetchLocalDetail(ctx, itemID)
+	if err != nil {
+		return items.ItemStatsCounts{}, translateLocalFetchError(err)
+	}
+	// counts 是本次抓取到的四项公开计数。
+	counts := items.ItemStatsCounts{
+		BrowseCnt: detail.BrowseCnt, WantCnt: detail.WantCnt,
+		CollectCnt: detail.CollectCnt, SoldCnt: detail.SoldCnt,
+	}
+	return counts, nil
+}
+
+// translateLocalFetchError 把本机助手场景错误翻译为商品统计服务自有哨兵。
+// 未识别的错误原样返回，由传输层按未归类错误记录诊断日志。
+func translateLocalFetchError(err error) error {
+	switch {
+	case errors.Is(err, marketintel.ErrLocalFetchRiskControl):
+		return items.ErrItemStatsRiskControl
+	case errors.Is(err, marketintel.ErrLocalFetchNotLoggedIn):
+		return items.ErrItemStatsNotLoggedIn
+	case errors.Is(err, marketintel.ErrLocalFetchUnauthorized):
+		return items.ErrItemStatsUnauthorized
+	case errors.Is(err, marketintel.ErrLocalFetchUnavailable):
+		return items.ErrItemStatsUnavailable
+	default:
+		return err
+	}
+}
+
+// fetchLocalDetail 执行一次助手取详情调用并解析响应；失败统一映射为助手场景错误。
+// 该方法只发起一次 HTTP 调用，不做批量与扇出：平台限流的重试语义由助手自身决定。
+func (c *LocalFetchAgentClient) fetchLocalDetail(ctx context.Context, itemID string) (localFetchDetailResponse, error) {
+	if c == nil {
+		return localFetchDetailResponse{}, marketintel.ErrLocalFetchUnavailable
+	}
+	// payload 是取详情请求体；只发送 item_id，助手自行拼接商品页地址。
+	payload, marshalErr := json.Marshal(map[string]string{"item_id": itemID})
+	if marshalErr != nil {
+		return localFetchDetailResponse{}, fmt.Errorf("构造本机抓取请求失败: %w", marshalErr)
+	}
+	// request 是取详情请求；err 表示请求构造失败。
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return localFetchDetailResponse{}, fmt.Errorf("构造本机抓取请求失败: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(localFetchTokenHeader, c.token)
+
+	// response 是助手响应；doErr 表示网络层失败（助手未启动、隧道断开等）。
+	response, doErr := c.httpClient.Do(request)
+	if doErr != nil {
+		c.logger.Warn("本机抓取助手不可达", "item_id", itemID)
+		return localFetchDetailResponse{}, fmt.Errorf("%w: 连接助手失败", marketintel.ErrLocalFetchUnavailable)
+	}
+	defer func() { _ = response.Body.Close() }()
+	// body 是响应正文。
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, localFetchMaxBodyBytes))
+	if readErr != nil {
+		return localFetchDetailResponse{}, fmt.Errorf("%w: 读取助手响应失败", marketintel.ErrLocalFetchUnavailable)
+	}
+	if response.StatusCode != http.StatusOK {
+		return localFetchDetailResponse{}, c.mapLocalFetchFailure(itemID, response.StatusCode, body)
+	}
+	// detail 是解析后的详情。
+	var detail localFetchDetailResponse
+	if // decodeErr 是助手响应解析失败原因。
+	decodeErr := json.Unmarshal(body, &detail); decodeErr != nil {
+		c.logger.Warn("本机抓取助手响应解析失败", "item_id", itemID)
+		return localFetchDetailResponse{}, fmt.Errorf("解析助手响应失败: %w", decodeErr)
+	}
+	return detail, nil
 }
 
 // mapLocalFetchFailure 把助手的失败响应映射为应用层场景错误。

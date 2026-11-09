@@ -69,6 +69,7 @@ func TestOpenAPISuccessContractCoverage(t *testing.T) {
 		{name: "sourcing", run: TestSourcingEndpointsContract},
 		{name: "market-intel", run: TestMarketIntelEndpointsContract},
 		{name: "market-intel-detail", run: TestMarketIntelDetailEndpointsContract},
+		{name: "item-stats", run: TestItemStatsEndpointsContract},
 	}
 	// scenario 是当前执行的领域真实响应场景。
 	for _, scenario := range scenarios {

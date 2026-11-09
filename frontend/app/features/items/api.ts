@@ -19,6 +19,8 @@ ItemLifecycleTarget,
 ItemPublishBatchPreviewResponse,
 ItemPublishBatchResponse,
 ItemPublishResponse,ItemSyncResponse,
+ItemStats,
+ItemStatsBatchResult,
 OperationResponse,
 ShippingRule
 } from './models';
@@ -349,3 +351,35 @@ export const retryFailedItemLifecycleBatch = async (batchId: string, options?: R
 export const cancelItemLifecycleBatch = async (batchId: string, options?: RequestControlOptions): Promise<ItemLifecycleStatusResult> => {
   return runContractRequest(/* signal 控制生命周期批次取消请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/lifecycle-batches/{batch_id}/cancel', { params: { path: { batch_id: batchId } }, body: {} as never, signal }), options) as unknown as Promise<ItemLifecycleStatusResult>;
 }
+
+// refreshItemStats 强制刷新单个商品的浏览量/想要量统计；服务端忽略 24 小时缓存。
+export const refreshItemStats = async (cookieId: string, itemId: string, options?: RequestControlOptions): Promise<ItemStats> => {
+  // response 是生成契约约束的单商品统计传输对象。
+  const response = await runContractRequest(/* signal 控制单商品统计刷新请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/{cookie_id}/{item_id}/stats/refresh', {
+    params: { path: { cookie_id: cookieId, item_id: itemId } },
+    signal,
+  }), options);
+  return response as unknown as ItemStats;
+}
+
+// refreshStatsBatch 提交当前页商品并执行一轮限量批量刷新；单轮上限与风控即停由服务端强制。
+export const refreshStatsBatch = async (cookieId: string, itemIds: string[], limit?: number, options?: RequestControlOptions): Promise<ItemStatsBatchResult> => {
+  // response 是生成契约约束的批量刷新传输对象。
+  const response = await runContractRequest(/* signal 控制批量统计刷新请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/stats/refresh-batch', {
+    body: { cookie_id: cookieId, item_ids: itemIds, ...(limit === undefined ? {} : { limit }) } as never,
+    signal,
+  }), options);
+  return response as unknown as ItemStatsBatchResult;
+}
+
+// statsRefreshErrorMessage 把商品统计刷新失败转换为可操作提示，优先区分人工验证与助手不可用。
+// 该函数放在 API 适配层：只有适配器可以引用共享 HTTP 错误类型。
+export const statsRefreshErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiError) {
+    if (error.status === 409) return '闲鱼要求人机验证：请在抓取助手浏览器中完成验证后重试。';
+    if (error.status === 503) return '本机抓取助手不可用：请确认助手已启动、反向隧道已连接。';
+    if (error.status === 403) return '无权操作该账号。';
+    return error.message || '刷新商品统计失败。';
+  }
+  return error instanceof Error ? error.message : '刷新商品统计失败。';
+};

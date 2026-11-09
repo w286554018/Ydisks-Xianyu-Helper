@@ -75,6 +75,14 @@ type FetchDetailResponse struct {
 	SellerNickname string `json:"seller_nickname"`
 	// SellerID 是卖家标识。
 	SellerID string `json:"seller_id"`
+	// BrowseCnt 是商品浏览量。
+	BrowseCnt int64 `json:"browse_cnt"`
+	// WantCnt 是商品想要人数。
+	WantCnt int64 `json:"want_cnt"`
+	// CollectCnt 是商品收藏数。
+	CollectCnt int64 `json:"collect_cnt"`
+	// SoldCnt 是商品已售数。
+	SoldCnt int64 `json:"sold_cnt"`
 }
 
 // ErrorResponse 是助手统一错误响应；message 为可操作中文提示，不含任何凭据。
@@ -213,6 +221,10 @@ func (a *Agent) handleFetchDetail(w http.ResponseWriter, r *http.Request) {
 		Images:         detail.Images,
 		SellerNickname: detail.SellerNickname,
 		SellerID:       detail.SellerID,
+		BrowseCnt:      detail.BrowseCount,
+		WantCnt:        detail.WantCount,
+		CollectCnt:     detail.CollectCount,
+		SoldCnt:        detail.SoldCount,
 	})
 }
 

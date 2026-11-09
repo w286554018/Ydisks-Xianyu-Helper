@@ -7,7 +7,6 @@ import (
 
 	"xianyu-go/internal/adapter"
 	"xianyu-go/internal/application/lifecycle"
-	orderapp "xianyu-go/internal/application/orders"
 	"xianyu-go/internal/auth"
 	"xianyu-go/internal/automation"
 	"xianyu-go/internal/browser"
@@ -133,15 +132,10 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 	if adminSettingsDependencies == nil || chatDependencies == nil || systemDependencies == nil {
 		return Runtime{}, fmt.Errorf("构造 transport 基础设施依赖失败")
 	}
-	// orderReconciliationRecovery、reconciliationErr 分别是订单补偿协调器及其构造错误。
-	orderReconciliationRecovery, reconciliationErr := orderapp.NewReconciliationRecoveryCoordinator(systemDependencies.NewReconciliationService(infrastructure.Logger))
-	if reconciliationErr != nil {
-		return Runtime{}, fmt.Errorf("构造订单补偿恢复协调器失败: %w", reconciliationErr)
-	}
-	// databaseHealth 是 HTTP 健康检查使用的窄数据库探测 Port。
-	databaseHealth := systemDependencies.NewDatabaseHealth()
-	if databaseHealth == nil {
-		return Runtime{}, fmt.Errorf("构造数据库健康检查端口失败")
+	// systemPorts、portsErr 是系统级适配器派生的窄端口及其构造错误。
+	systemPorts, portsErr := buildServicePorts(systemDependencies, infrastructure.Logger)
+	if portsErr != nil {
+		return Runtime{}, portsErr
 	}
 	// platformDependencies、platformErr 分别是平台协议适配器集合及其构造错误，仅组合层可持有。
 	platformDependencies, platformErr := adapter.NewDefaultPlatformDependencies(infrastructure.Logger)
@@ -179,6 +173,11 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 	if marketIntelSchedulerErr := buildMarketIntelScheduler(infrastructure, lifecycleCoordinator, marketIntelService); marketIntelSchedulerErr != nil {
 		return Runtime{}, marketIntelSchedulerErr
 	}
+	// itemStatsService、itemStatsErr 是我的商品统计服务及其构造错误。
+	itemStatsService, itemStatsErr := buildItemStats(infrastructure, options)
+	if itemStatsErr != nil {
+		return Runtime{}, itemStatsErr
+	}
 	// updateRunningCookie 将平台返回的新 Cookie 同步到运行时；值不记录到日志。
 	updateRunningCookie := func(ctx context.Context, accountID, value string) {
 		if services == nil {
@@ -197,11 +196,11 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 	services, buildErr := composition.New(composition.Dependencies{
 		OrderDependencies: orderDependencies, AccountDependencies: accountDependencies, ItemDependencies: itemDependencies,
 		ChatDependencies: chatDependencies, AutomationDependencies: automationDependencies, TransportApplications: transportApplications,
-		OrderReconciliationRecovery: orderReconciliationRecovery, Manager: runtimeBundle.Manager, Automation: runtimeBundle.Automation, OrderDetails: runtimeBundle.OrderDetails,
+		OrderReconciliationRecovery: systemPorts.reconciliationRecovery, Manager: runtimeBundle.Manager, Automation: runtimeBundle.Automation, OrderDetails: runtimeBundle.OrderDetails,
 		Notifier: runtimeBundle.Notifier, Chat: runtimeBundle.Chat, ChatApplication: runtimeBundle.ChatApplication, Logger: infrastructure.Logger,
 		MTopClient: platformDependencies.MTOPClient, LongLoginClient: platformDependencies.LongLoginClient, QRLogin: platformDependencies.QRLoginService(),
 		UpdateRunningCookie: updateRunningCookie, SessionRecovery: sessionRecovery, LifecycleContext: lifecycleCoordinator.Context,
-		Sourcing: sourcingService, MarketIntel: marketIntelService,
+		Sourcing: sourcingService, MarketIntel: marketIntelService, ItemStats: itemStatsService,
 	})
 	if buildErr != nil {
 		return Runtime{}, fmt.Errorf("构造应用服务集合失败: %w", buildErr)
@@ -209,7 +208,7 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 	// serverDependencies、dependenciesErr 分别是投影给 HTTP transport 的依赖快照及其构造错误。
 	serverDependencies, dependenciesErr := ServerDependencies(services, HTTPDependencies{
 		Auth: &auth.Service{Store: infrastructure.Store, Logger: infrastructure.Logger, Secure: options.SecureCookie}, WebDir: options.WebDir, Addr: options.Addr,
-		Logger: infrastructure.Logger, DatabaseHealth: databaseHealth,
+		Logger: infrastructure.Logger, DatabaseHealth: systemPorts.databaseHealth,
 	}, sessionRecovery)
 	if dependenciesErr != nil {
 		return Runtime{}, dependenciesErr

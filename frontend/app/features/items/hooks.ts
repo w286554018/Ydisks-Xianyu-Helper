@@ -1,4 +1,4 @@
-import { useCallback,useEffect,useRef,useState } from 'react';
+import { useCallback,useEffect,useRef,useState,type Dispatch,type SetStateAction } from 'react';
 import {
 cancelItemPublishBatch,
 deleteItemPublishBatch,
@@ -9,6 +9,8 @@ recommendPublishCategory,
 retryFailedItemPublishBatch,
 startItemPublishBatch,
 } from './api';
+import { refreshItemStats,refreshStatsBatch,statsRefreshErrorMessage } from './api';
+import { applyStatsToItems,batchRefreshMessage,statsRowKey } from './stats';
 import { canRetryBatch,canStartBatch,isBatchInProgress,isCurrentBatchRequest,selectActivePublishBatch } from './batchState';
 import type {
 BatchFallbackCategory,
@@ -18,6 +20,7 @@ ItemPublishBatchState,
 PublishBatchDetail,
 PublishBatchPreview,
 } from './types';
+import type { Item } from './models';
 
 // useItemPublishBatch 集中管理批量铺货的表单、任务恢复、轮询和重试状态。
 export const useItemPublishBatch = (options: ItemPublishBatchOptions): ItemPublishBatchState => {
@@ -478,4 +481,84 @@ export const useItemPublishBatch = (options: ItemPublishBatchOptions): ItemPubli
     handleRetryBatchFailed,
   };
   return result;
+};
+
+// ItemStatsRefreshState 描述商品统计刷新的进行状态、结果提示与两个刷新动作。
+export interface ItemStatsRefreshState {
+  // refreshingKeys 是正在刷新中的商品行键集合，用于禁用对应行的行内按钮。
+  refreshingKeys: string[];
+  // batchRefreshing 表示「刷新本页」是否正在执行。
+  batchRefreshing: boolean;
+  // message 是最近一次刷新的结果或可操作错误提示；空串表示无需提示。
+  message: string;
+  // refreshOne 强制刷新单个商品的统计并就地更新该行。
+  refreshOne: (item: Item) => Promise<void>;
+  // refreshPage 提交当前页商品执行一轮限量批量刷新并就地更新命中行。
+  refreshPage: (pageItems: Item[]) => Promise<void>;
+}
+
+// useItemStatsRefresh 管理商品统计刷新的进行状态、结果提示与就地更新。
+// 单行结果按「账号 + 商品」定位，晚到的响应不会污染其它行；批量刷新使用代次守卫，
+// 避免较旧的批量响应覆盖较新的结果；组件卸载后不再写入任何状态。
+export const useItemStatsRefresh = (setItems: Dispatch<SetStateAction<Item[]>>): ItemStatsRefreshState => {
+  // refreshingKeys 保存正在刷新中的商品行键。
+  const [refreshingKeys, setRefreshingKeys] = useState<string[]>([]);
+  // batchRefreshing 表示批量刷新是否进行中。
+  const [batchRefreshing, setBatchRefreshing] = useState(false);
+  // message 保存最近一次刷新的提示文案。
+  const [message, setMessage] = useState('');
+  // batchGeneration 标识最新一次批量刷新，旧响应不得覆盖新结果。
+  const batchGeneration = useRef(0);
+  // mountedRef 记录组件是否仍然挂载，避免卸载后写入状态。
+  const mountedRef = useRef(true);
+  // markUnmounted 在组件卸载时标记状态已失效，阻止后续异步结果写入状态。
+  const markUnmounted = useCallback(/* markUnmountedAction 标记组件已经卸载。 */ () => {
+    mountedRef.current = false;
+  }, []);
+  useEffect(/* 挂载时注册卸载标记；卸载后所有异步回调都不再写入状态。 */ () => markUnmounted, [markUnmounted]);
+  // refreshOne 强制刷新单个商品：用户点击即要求最新值，因此不做新鲜度判断。
+  const refreshOne = useCallback(/* refreshOneAction 刷新一行商品统计。 */ async (item: Item) => {
+    // rowKey 是该行的稳定索引键。
+    const rowKey = statsRowKey(item.cookie_id, item.item_id);
+    setRefreshingKeys(/* previous 是加入前的刷新中集合。 */ previous => previous.includes(rowKey) ? previous : [...previous, rowKey]);
+    setMessage('');
+    try {
+      // stats 是服务端返回的最新统计。
+      const stats = await refreshItemStats(item.cookie_id, item.item_id);
+      if (mountedRef.current) setItems(/* previous 是刷新前的商品列表。 */ previous => applyStatsToItems(previous, [stats]));
+    } catch (error /* error 是单行统计刷新失败原因  */) {
+      if (mountedRef.current) setMessage(statsRefreshErrorMessage(error));
+    } finally {
+      if (mountedRef.current) setRefreshingKeys(/* previous 是移除后的刷新中集合。 */ previous => previous.filter(/* key 是当前仍在刷新的行键。 */ key => key !== rowKey));
+    }
+  }, [setItems]);
+
+  // refreshPage 提交当前页商品并执行一轮限量批量刷新。
+  const refreshPage = useCallback(/* refreshPageAction 刷新当前页商品统计。 */ async (pageItems: Item[]) => {
+    // 当前页没有商品时不发起请求，避免产生一次无意义的平台访问。
+    if (pageItems.length === 0) return;
+    // requestGeneration 是本次批量刷新的单调递增代次。
+    const requestGeneration = ++batchGeneration.current;
+    // cookieId 是本次提交的账号；同一页可能跨账号，按第一个商品所属账号提交以匹配服务端接口。
+    const cookieId = pageItems[0].cookie_id;
+    // itemIds 是本次提交的商品标识集合，只包含与提交账号一致的商品。
+    const itemIds = pageItems.filter(/* item 只保留与提交账号一致的商品。 */ item => item.cookie_id === cookieId).map(/* item 取商品标识。 */ item => item.item_id);
+    setBatchRefreshing(true);
+    setMessage('');
+    try {
+      // result 是服务端返回的批量刷新结果。
+      const result = await refreshStatsBatch(cookieId, itemIds);
+      if (!mountedRef.current || requestGeneration !== batchGeneration.current) return;
+      setItems(/* previous 是刷新前的商品列表。 */ previous => applyStatsToItems(previous, result.refreshed));
+      setMessage(batchRefreshMessage(result));
+    } catch (error /* error 是批量统计刷新失败原因  */) {
+      if (mountedRef.current && requestGeneration === batchGeneration.current) setMessage(statsRefreshErrorMessage(error));
+    } finally {
+      if (mountedRef.current) setBatchRefreshing(false);
+    }
+  }, [setItems]);
+
+  // state 是本 Hook 对外暴露的状态与动作快照。
+  const state: ItemStatsRefreshState = { refreshingKeys, batchRefreshing, message, refreshOne, refreshPage };
+  return state;
 };

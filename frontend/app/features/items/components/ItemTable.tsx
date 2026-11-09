@@ -1,7 +1,8 @@
-import { Archive,CheckCircle2,CircleDashed,Copy,Edit,Link2,Trash2 } from 'lucide-react';
+import { Archive,CheckCircle2,CircleDashed,Copy,Edit,Link2,RefreshCw,Trash2 } from 'lucide-react';
 import React from 'react';
 import type { Item,ItemAIOverride,ShippingRule } from '../api';
 import { countTriggerRules,TRADE_AUTOMATION_TRIGGERS } from '../ruleCoverage';
+import { statsTooltip } from '../stats';
 
 /** itemRowKey 计算商品行的稳定选择键。 */
 const itemRowKey = (item: Item): string => `${item.cookie_id}-${item.item_id}`;
@@ -34,12 +35,16 @@ export interface ItemTableProps {
   selectedKeys?: string[];
   /** onToggleSelect 切换一个商品的勾选状态；与 selectedKeys 同时提供才启用多选。 */
   onToggleSelect?: (item: Item) => void;
+  /** onRefreshStats 刷新单个商品的浏览量/想要量统计；缺省时不显示行内刷新按钮。 */
+  onRefreshStats?: (item: Item) => void;
+  /** refreshingKeys 是正在刷新中的商品行键集合，用于禁用对应行内按钮。 */
+  refreshingKeys?: string[];
   /** emptyText 是没有商品时的提示文案。 */
   emptyText: string;
 }
 
 /** ItemTable 以表格形式展示商品，并逐列标出四类交易自动化规则的配置数量。 */
-const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, formatPrice, aiStatusText, onConfigureDelivery, onOpenAISettings, onEdit, onCopyToAccounts, onDownshelf, onDelete, selectedKeys, onToggleSelect, emptyText }) => {
+const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, formatPrice, aiStatusText, onConfigureDelivery, onOpenAISettings, onEdit, onCopyToAccounts, onDownshelf, onDelete, selectedKeys, onToggleSelect, onRefreshStats, refreshingKeys, emptyText }) => {
   if (items.length === 0) return <div className="py-20 text-center text-gray-400">{emptyText}</div>;
   return (
     <div className="ios-card overflow-x-auto rounded-2xl">
@@ -50,6 +55,8 @@ const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, fo
             <th className="px-4 py-3">商品</th>
             <th className="px-4 py-3">账号</th>
             <th className="px-4 py-3">价格</th>
+            <th className="px-4 py-3">浏览</th>
+            <th className="px-4 py-3">想要</th>
             {TRADE_AUTOMATION_TRIGGERS.map(/* entry 是一类交易自动化触发器列。 */ entry => <th key={entry.trigger} className="px-4 py-3">{entry.label}</th>)}
             <th className="px-4 py-3">AI 客服</th>
             <th className="px-4 py-3 text-right">操作</th>
@@ -80,6 +87,8 @@ const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, fo
                 </td>
                 <td className="px-4 py-3 text-gray-600">{accountNickname(item.cookie_id)}</td>
                 <td className="px-4 py-3 text-gray-700">{formatPrice(item.item_price)}</td>
+                <td className="px-4 py-3 text-gray-700" title={item.stats ? statsTooltip(item.stats) : '尚未抓取统计，可点击行内刷新'}>{item.stats ? item.stats.browse_cnt : '—'}</td>
+                <td className="px-4 py-3 text-gray-700" title={item.stats ? statsTooltip(item.stats) : '尚未抓取统计，可点击行内刷新'}>{item.stats ? item.stats.want_cnt : '—'}</td>
                 {TRADE_AUTOMATION_TRIGGERS.map(/* entry 是一类交易自动化触发器列。 */ entry => {
                   // ruleCount 是该商品在此触发器下生效的规则条数，0 表示未配置。
                   const ruleCount = countTriggerRules(item, entry.trigger, rules);
@@ -100,6 +109,7 @@ const ItemTable: React.FC<ItemTableProps> = ({ items, rules, accountNickname, fo
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-1.5">
                     <button type="button" onClick={/* 点击打开该商品的跨账号复制发布。 */ () => onCopyToAccounts(item)} disabled={isDown} className="rounded-lg bg-gray-100 p-1.5 text-gray-600 hover:bg-brand hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="复制到其他账号" aria-label={`复制商品到其他账号：${item.item_title || item.item_id}`}><Copy className="h-3.5 w-3.5" /></button>
+                    {onRefreshStats && <button type="button" onClick={/* 点击刷新该商品的浏览与想要数据。 */ () => onRefreshStats(item)} disabled={(refreshingKeys || []).includes(rowKey)} className="rounded-lg bg-gray-100 p-1.5 text-gray-600 hover:bg-brand hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="刷新浏览/想要数据" aria-label={`刷新商品统计：${item.item_title || item.item_id}`}><RefreshCw className="h-3.5 w-3.5" /></button>}
                     <button type="button" onClick={/* 点击打开该商品的发货规则配置。 */ () => onConfigureDelivery(item)} className="inline-flex items-center gap-1 rounded-lg bg-gray-900 px-2.5 py-1.5 font-bold text-white hover:bg-black"><Link2 className="h-3 w-3" />发货规则</button>
                     {!isDown && <button type="button" onClick={/* 点击编辑商品。 */ () => onEdit(item)} className="rounded-lg bg-gray-100 p-1.5 text-gray-600 hover:bg-brand hover:text-white" title="编辑" aria-label="编辑"><Edit className="h-3.5 w-3.5" /></button>}
                     {!isDown && <button type="button" onClick={/* 点击打开该商品的下架确认。 */ () => onDownshelf(item)} className="rounded-lg bg-gray-100 p-1.5 text-gray-600 hover:bg-amber-100 hover:text-amber-700" title="下架" aria-label="下架"><Archive className="h-3.5 w-3.5" /></button>}

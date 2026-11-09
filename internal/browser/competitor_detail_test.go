@@ -325,6 +325,62 @@ func TestParseCompetitorDetailResponseTolerantFields(t *testing.T) {
 	}
 }
 
+// TestParseCompetitorDetailResponseCounts 验证浏览量/想要量/收藏/已售在字符串、数字、浮点、
+// null、缺失与非法文本等形态下都能稳定解析：平台类型差异不得让整段详情解析失败。
+func TestParseCompetitorDetailResponseCounts(t *testing.T) {
+	// cases 是计数形态与期望解析结果的对照表。
+	cases := []struct {
+		// name 是用例名。
+		name string
+		// itemDO 是详情接口的 itemDO 片段。
+		itemDO string
+		// want 是期望的四项计数。
+		want CompetitorDetail
+	}{
+		{
+			name:   "数字形态",
+			itemDO: `"browseCnt":22,"wantCnt":2,"collectCnt":1,"soldCnt":0`,
+			want:   CompetitorDetail{BrowseCount: 22, WantCount: 2, CollectCount: 1, SoldCount: 0},
+		},
+		{
+			name:   "字符串形态",
+			itemDO: `"browseCnt":"22","wantCnt":"2","collectCnt":"1","soldCnt":"0"`,
+			want:   CompetitorDetail{BrowseCount: 22, WantCount: 2, CollectCount: 1, SoldCount: 0},
+		},
+		{
+			name:   "浮点与 null 形态",
+			itemDO: `"browseCnt":22.0,"wantCnt":null,"collectCnt":"1.0","soldCnt":3`,
+			want:   CompetitorDetail{BrowseCount: 22, WantCount: 0, CollectCount: 1, SoldCount: 3},
+		},
+		{
+			name:   "字段缺失",
+			itemDO: `"itemId":"x"`,
+			want:   CompetitorDetail{},
+		},
+		{
+			name:   "负值、非法文本与空串一律按零处理",
+			itemDO: `"browseCnt":-5,"wantCnt":"大量","collectCnt":"","soldCnt":1`,
+			want:   CompetitorDetail{BrowseCount: 0, WantCount: 0, CollectCount: 0, SoldCount: 1},
+		},
+	}
+	// tc 是当前计数解析用例。
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// body 是拼装出的详情响应；标题必填，否则会被判为不可用详情。
+			body := []byte(`{"ret":["SUCCESS::调用成功"],"data":{"itemDO":{"title":"测试商品",` + tc.itemDO + `}}}`)
+			// detail、usable 是解析出的详情与是否可用。
+			detail, _, usable := ParseCompetitorDetailResponse("1", body)
+			if !usable {
+				t.Fatalf("计数形态 %s 不应影响详情可用性", tc.name)
+			}
+			if detail.BrowseCount != tc.want.BrowseCount || detail.WantCount != tc.want.WantCount ||
+				detail.CollectCount != tc.want.CollectCount || detail.SoldCount != tc.want.SoldCount {
+				t.Fatalf("计数解析不符: got=%+v want=%+v", detail, tc.want)
+			}
+		})
+	}
+}
+
 // TestParseCompetitorDetailResponseRiskControl 验证被判风控时返回码透传且不视为可用详情。
 func TestParseCompetitorDetailResponseRiskControl(t *testing.T) {
 	// body 是平台判罚响应。

@@ -16,11 +16,12 @@ import { BatchPhaseIndicator } from '../components/BatchPhaseIndicator';
 import ItemTable from '../components/ItemTable';
 import { ManualLocationPicker } from '../components/ManualLocationPicker';
 import { consumeSelectedFile } from '../fileInput';
-import { useItemPublishBatch } from '../hooks';
+import { useItemStatsRefresh,useItemPublishBatch } from '../hooks';
 import { useItemCopyPublish } from '../copyPublish';
 import { useItemActions } from '../itemActions';
 import ItemCopyModal from '../components/ItemCopyModal';
 import { matchesRuleCoverageFilter,paginateItems,TRADE_AUTOMATION_TRIGGERS,type RuleCoverageFilter } from '../ruleCoverage';
+import { countRefreshableStats } from '../stats';
 import type { ItemListProps } from '../types';
 import { PageHeader } from '../../../../shared/ui/PageHeader';
 
@@ -95,6 +96,9 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
     const itemsList = await getItems();
     if (requestGeneration === itemsRequestGeneration.current) setItems(itemsList);
   }, []);
+
+  // statsState 是商品浏览量/想要量的刷新状态与两个刷新动作；结果就地更新，不整页重载。
+  const statsState = useItemStatsRefresh(setItems);
 
   // loadShippingRules 刷新商品关联的自动化规则。
   const loadShippingRules = useCallback(/* 当前回调封装可复用的交互处理逻辑。 */ async () => {
@@ -289,6 +293,8 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
   );
   // pagedItems 是列表模式当前页的分页结果，由可见商品与页码推导。
   const pagedItems = useMemo(/* 按请求页码切分可见商品。 */ () => paginateItems(visibleItems, listPage), [visibleItems, listPage]);
+  // refreshableCount 是当前页仍需刷新统计的商品数量，用于按钮提示。
+  const refreshableCount = useMemo(/* 按当前页商品推导需要刷新的数量。 */ () => countRefreshableStats(pagedItems.rows), [pagedItems.rows]);
   // changeViewMode 切换展示模式并尽力保存偏好；存储失败不影响本次切换。
   const changeViewMode = (mode: ItemViewMode) => {
     setViewMode(mode);
@@ -355,6 +361,18 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 同步商品
             </button>
+            <button
+              onClick={/* 点击提交当前页商品并刷新浏览量/想要量数据。 */ () => void statsState.refreshPage(pagedItems.rows)}
+              disabled={statsState.batchRefreshing || pagedItems.rows.length === 0}
+              title="刷新当前页商品的浏览量/想要量；单轮最多刷新 10 个"
+              className="px-5 py-3 rounded-2xl font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${statsState.batchRefreshing ? 'animate-spin' : ''}`} />
+              刷新本页{refreshableCount > 0 ? `（${refreshableCount}）` : ''}
+            </button>
+            {statsState.message && (
+              <span role="status" className="max-w-[320px] text-xs font-bold text-gray-500">{statsState.message}</span>
+            )}
             <button
               onClick={openAddModal}
               className="px-5 py-3 rounded-2xl font-bold bg-gray-900 text-white hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg"
@@ -451,6 +469,8 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
           )}
           <ItemTable
             items={pagedItems.rows}
+            onRefreshStats={statsState.refreshOne}
+            refreshingKeys={statsState.refreshingKeys}
             rules={shippingRules}
             accountNickname={accountNickname}
             formatPrice={formatItemPrice}

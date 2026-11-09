@@ -31,6 +31,8 @@ type itemListResponse struct {
 	AIOverride string `json:"ai_override"`
 	// Status 是平台生命周期状态：active 在售 / down 已下架。
 	Status string `json:"status"`
+	// Stats 是商品的浏览量/想要量统计；从未抓取过时为 null。
+	Stats *itemStatsResponse `json:"stats"`
 }
 
 // itemDetailResponse 是单个本地商品详情接口的具名响应 DTO。

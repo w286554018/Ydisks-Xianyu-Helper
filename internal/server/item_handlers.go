@@ -390,11 +390,13 @@ func (s *Server) listItems(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "查询失败")
 		return
 	}
-	// result 用于本次流程后续判断的结果。
+	// statsByKey 是本次列表附带的商品统计（按账号 + 商品索引）；查询失败时降级为无统计并留下告警。
+	statsByKey := s.itemStatsForList(r, items)
+	// result 是本次列表响应集合。
 	result := make([]itemListResponse, 0, len(items))
-	// it 表示当前遍历过程中的商品行。
+	// it 是当前遍历到的商品。
 	for _, it := range items {
-		result = append(result, itemToMap(it))
+		result = append(result, itemToMap(it, statsByKey))
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -517,11 +519,13 @@ func (s *Server) listItemsByCookie(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "查询失败")
 		return
 	}
-	// out 用于本次流程后续判断的out
+	// statsByKey 是本次列表附带的商品统计（按账号 + 商品索引）。
+	statsByKey := s.itemStatsForList(r, items)
+	// out 是本次列表响应集合。
 	out := make([]itemListResponse, 0, len(items))
-	// it 表示当前遍历过程中的it
+	// it 是当前遍历到的商品。
 	for _, it := range items {
-		out = append(out, itemToMap(it))
+		out = append(out, itemToMap(it, statsByKey))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -733,13 +737,24 @@ func (s *Server) setItemMultiQuantity(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, operationResponse{Success: true})
 }
 
-func itemToMap(it itemapp.CatalogItem) itemListResponse { // itemToMap 将应用商品模型转换为商品列表 DTO。
+// itemToMap 将应用商品模型转换为商品列表 DTO；statsByKey 缺失时 stats 字段为 null。
+func itemToMap(it itemapp.CatalogItem, statsByKey map[string]itemapp.ItemStats) itemListResponse {
+	// imageURL 是从商品详情解析出的主图地址。
 	imageURL := itemImageFromDetail(it.ItemDetail)
+	// stats 是该商品的统计；不存在时为 nil，前端渲染为「—」。
+	var stats *itemStatsResponse
+	if // found、ok 分别是统计值与是否存在；不存在时必须保持 null 而不是补零。
+	found, ok := statsByKey[itemapp.ItemStatsKey(it.CookieID, it.ItemID)]; ok {
+		// dto 是转换后的统计响应，取地址后写入指针字段。
+		dto := itemStatsDTO(found)
+		stats = &dto
+	}
 	return itemListResponse{
 		ID: it.ID, CookieID: it.CookieID, ItemID: it.ItemID, ItemTitle: it.ItemTitle,
 		ItemDescription: it.ItemDescription, ItemCategory: it.ItemCategory, ItemPrice: it.ItemPrice,
 		ItemDetail: it.ItemDetail, ItemImage: imageURL, IsMultiSpec: it.IsMultiSpec,
 		MultiQuantityDelivery: it.MultiQuantityDelivery, IsMultiQtyShip: it.MultiQuantityDelivery, AIOverride: it.AIOverride, Status: it.Status,
+		Stats: stats,
 	}
 }
 

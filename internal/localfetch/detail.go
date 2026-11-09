@@ -329,8 +329,11 @@ func (a *Agent) FetchDetail(ctx context.Context, itemID string) (browser.Competi
 func sleepWithJitter(ctx context.Context, attempt int, base, jitter time.Duration) error {
 	// delay 是本次退避时长。
 	delay := time.Duration(attempt) * base
-	// extra 是随机抖动。
-	extra := time.Duration(rand.Int63n(int64(jitter))) //nolint:gosec // 抖动只需随机分布，不用于安全用途
+	// extra 是本次随机抖动；抖动上限非正时不做抖动，避免 rand.Int63n(0) 直接 panic。
+	extra := time.Duration(0)
+	if jitter > 0 {
+		extra = time.Duration(rand.Int63n(int64(jitter))) //nolint:gosec // 抖动只需随机分布，不用于安全用途
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

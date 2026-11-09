@@ -451,6 +451,8 @@ type ApplicationPorts struct {
 	itemCopyPublish ItemCopyPublishPort
 	// itemLifecycle 是商品平台下架/删除用例。
 	itemLifecycle ItemLifecyclePort
+	// itemStats 是我的商品统计刷新与读取用例。
+	itemStats ItemStatsPort
 	// itemSync 是商品同步用例。
 	itemSync ItemSyncPort
 	// itemCatalog 是商品目录读取用例。
@@ -545,6 +547,7 @@ func (ports *ApplicationPorts) validate() error {
 		{"orders", ports.orders}, {"order_refresh_jobs", ports.orderRefreshJobs}, {"item_single_publish", ports.itemSinglePublish},
 		{"item_batch_preview", ports.itemBatchPreview}, {"item_batch_management", ports.itemBatchManagement}, {"item_category_recommendation", ports.itemCategoryRecommendation},
 		{"item_batch_preview_persistence", ports.itemBatchPreviewPersistence}, {"item_batch_local_publish", ports.itemBatchLocalPublish}, {"item_sync", ports.itemSync},
+		{"item_stats", ports.itemStats},
 		{"item_catalog", ports.itemCatalog}, {"item_catalog_mutation", ports.itemCatalogMutation}, {"item_ai_settings", ports.itemAISettings}, {"account_login", ports.accountLogin},
 		{"qr_login", ports.qrLogin}, {"session_recovery", ports.sessionRecovery}, {"platform_credentials", ports.platformCredentials},
 		{"authentication", ports.authentication}, {"login_audit", ports.loginAudit}, {"password_login", ports.passwordLogin},

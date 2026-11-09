@@ -117,10 +117,46 @@ export interface Item {
   ai_override?: ItemAIOverride;
   /** 商品在本地的生命周期状态：active 在售、down 已下架；旧数据缺省视为在售。 */
   status?: 'active' | 'down';
+  /** 商品浏览量/想要量统计；从未抓取过时为 null。 */
+  stats?: ItemStats | null;
 }
 
 /** 商品级 AI 配置支持的三态覆盖策略。 */
 export type ItemAIOverride = 'inherit' | 'enabled' | 'disabled';
+
+/** 我的商品统计：来自商品详情页的公开计数，用于列表展示与刷新。 */
+export interface ItemStats {
+  /** 统计所属账号标识。 */
+  cookie_id: string;
+  /** 平台商品标识。 */
+  item_id: string;
+  /** 商品浏览量。 */
+  browse_cnt: number;
+  /** 商品想要人数。 */
+  want_cnt: number;
+  /** 商品收藏数。 */
+  collect_cnt: number;
+  /** 商品已售数。 */
+  sold_cnt: number;
+  /** 最近一次成功抓取时间（RFC3339）；从未抓取时为空串。 */
+  fetched_at: string;
+  /** 数据是否仍在 24 小时缓存有效期内。 */
+  fresh: boolean;
+}
+
+/** 单轮批量刷新商品统计的响应结果。 */
+export interface ItemStatsBatchResult {
+  /** 本次成功刷新的统计，按抓取顺序排列。 */
+  refreshed: ItemStats[];
+  /** 因数据仍新鲜而跳过的数量。 */
+  skipped: number;
+  /** 被单轮上限截断、留待下次刷新的数量。 */
+  remaining: number;
+  /** 是否因平台风控提前停止。 */
+  stopped: boolean;
+  /** 停止原因；未停止时缺省。 */
+  stop_reason?: string;
+}
 
 /** 由商品级 AI 配置接口归一后的 UI 模型。 */
 export interface ItemAISettings {

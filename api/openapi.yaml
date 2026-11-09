@@ -4034,6 +4034,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/stats/refresh-batch":
+    post:
+      operationId: postApiV1ItemsStatsRefreshBatch
+      summary: postApiV1ItemsStatsRefreshBatch
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemStatsBatchRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemStatsBatchResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/items/{cookie_id}":
     post:
       operationId: postApiV1ItemsBycookie_id
@@ -4382,6 +4436,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/{cookie_id}/{item_id}/stats/refresh":
+    post:
+      operationId: postApiV1ItemsBycookie_idByitem_idStatsRefresh
+      summary: postApiV1ItemsBycookie_idByitem_idStatsRefresh
+      parameters:
+        - name: cookie_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemStats'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
           description: 统一错误响应
           content:
             application/json:
@@ -10343,6 +10456,10 @@ components:
         is_multi_qty_ship: {type: boolean}
         ai_override: {$ref: '#/components/schemas/ItemAIOverride'}
         status: {type: string, enum: [active, down]}
+        stats:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ItemStats'
     ItemListArrayResponse:
       type: array
       items: {$ref: '#/components/schemas/ItemListResponse'}
@@ -11910,3 +12027,35 @@ components:
       required: [accepted]
       properties:
         accepted: {type: boolean}
+    ItemStats:
+      type: object
+      required: [cookie_id, item_id, browse_cnt, want_cnt, collect_cnt, sold_cnt, fetched_at, fresh]
+      properties:
+        cookie_id: {type: string}
+        item_id: {type: string}
+        browse_cnt: {type: integer}
+        want_cnt: {type: integer}
+        collect_cnt: {type: integer}
+        sold_cnt: {type: integer}
+        fetched_at: {type: string}
+        fresh: {type: boolean}
+    ItemStatsBatchRequest:
+      type: object
+      required: [cookie_id, item_ids]
+      properties:
+        cookie_id: {type: string}
+        item_ids:
+          type: array
+          items: {type: string}
+        limit: {type: integer}
+    ItemStatsBatchResponse:
+      type: object
+      required: [refreshed, skipped, remaining, stopped]
+      properties:
+        refreshed:
+          type: array
+          items: {$ref: '#/components/schemas/ItemStats'}
+        skipped: {type: integer}
+        remaining: {type: integer}
+        stopped: {type: boolean}
+        stop_reason: {type: string}
