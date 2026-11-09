@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"xianyu-go/internal/aicompat"
 	sourcingapp "xianyu-go/internal/application/sourcing"
 	"xianyu-go/internal/browser"
 	"xianyu-go/internal/db"
@@ -320,7 +321,7 @@ func (c *SourcingChatClient) Complete(ctx context.Context, userID int64, systemP
 	var payload aiChatCompletionResponse
 	// decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON。
 	if // decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON（含被网关包一层的情况）。
-	decodeErr := json.Unmarshal(unwrapChatResponseEnvelope(raw), &payload); decodeErr != nil {
+	decodeErr := json.Unmarshal(aicompat.UnwrapChatResponseEnvelope(raw), &payload); decodeErr != nil {
 		return "", errors.New("AI 服务返回了无法解析的响应")
 	}
 	if len(payload.Choices) == 0 {

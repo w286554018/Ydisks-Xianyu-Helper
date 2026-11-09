@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"xianyu-go/internal/aicompat"
 	settingsapp "xianyu-go/internal/application/settings"
 	"xianyu-go/internal/netguard"
 )
@@ -300,7 +301,7 @@ func extractChatReply(raw []byte) (string, error) {
 	var payload aiChatCompletionResponse
 	// decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON。
 	if // decodeErr 表示成功响应不是可解析的 OpenAI 兼容 JSON（含被网关包一层的情况）。
-	decodeErr := json.Unmarshal(unwrapChatResponseEnvelope(raw), &payload); decodeErr != nil {
+	decodeErr := json.Unmarshal(aicompat.UnwrapChatResponseEnvelope(raw), &payload); decodeErr != nil {
 		return "", fmt.Errorf("AI 服务返回了无法解析的响应")
 	}
 	if len(payload.Choices) == 0 {

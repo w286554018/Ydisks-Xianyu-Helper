@@ -1,15 +1,19 @@
-package adapter
+// Package aicompat 兼容不同 OpenAI 兼容网关的响应形状差异。
+//
+// 该包是叶子包：只做响应形状归一，不依赖任何业务包，供适配器与引擎共用，
+// 避免同一兼容逻辑在多处重复实现而再次漏改。
+package aicompat
 
 import "encoding/json"
 
-// unwrapChatResponseEnvelope 兼容会被额外包一层的 OpenAI 兼容网关。
+// UnwrapChatResponseEnvelope 兼容会被额外包一层的 OpenAI 兼容网关。
 //
 // 部分自建网关（例如 sub2api）把标准 chat completion 响应整体放进 `data` 字段：
 // `{"data":{"choices":[...]}}`。按顶层读取 `choices` 会得到空候选，从而把
-// 「模型已正常回答」误判成「模型返回空结果」。本函数在解包前做一次形状归一：
+// 「模型已正常回答」误判成「模型返回空结果」。本函数在解析前做一次形状归一：
 // 顶层已有 `choices` 时原样返回；否则若 `data` 是对象且其内部含 `choices`，
 // 返回该内层对象的原始 JSON；其余形状（含非 JSON）一律原样返回，交由调用方按原逻辑报错。
-func unwrapChatResponseEnvelope(raw []byte) []byte {
+func UnwrapChatResponseEnvelope(raw []byte) []byte {
 	// probe 是仅用于探测形状的最小结构。
 	var probe struct {
 		// Choices 是顶层候选列表；非空表示已是标准形状。

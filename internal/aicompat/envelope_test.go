@@ -1,5 +1,5 @@
-// Package adapter: 兼容网关响应包一层 data 时的形状归一测试。
-package adapter
+// Package aicompat: 兼容网关响应形状归一的确定性测试。
+package aicompat
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ func TestUnwrapChatResponseEnvelope(t *testing.T) {
 	standard := `{"choices":[{"message":{"content":"标准"}}]}`
 	// wrapped 是被网关包一层 data 的响应（线上实测形状）。
 	wrapped := `{"data":{"choices":[{"message":{"content":"包装"}}],"id":"x"},"extra":1}`
-	// cases 是各类输入与期望的 choices 数量。
+	// cases 是各类输入与期望的候选数量。
 	cases := []struct {
 		// name 是用例名。
 		name string
@@ -33,13 +33,13 @@ func TestUnwrapChatResponseEnvelope(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// normalized 是归一后的响应字节。
-			normalized := unwrapChatResponseEnvelope([]byte(tc.raw))
+			normalized := UnwrapChatResponseEnvelope([]byte(tc.raw))
 			// payload 是用于统计候选数量的最小结构。
 			var payload struct {
 				// Choices 是候选列表。
 				Choices []json.RawMessage `json:"choices"`
 			}
-			if // err 是归一结果的 JSON 解析错误；非 JSON 输入会被原样返回，此处按原样处理。
+			if // err 是归一结果的 JSON 解析错误；非 JSON 输入会被原样返回，此时按原样处理。
 			err := json.Unmarshal(normalized, &payload); err != nil {
 				if string(normalized) == tc.raw {
 					return

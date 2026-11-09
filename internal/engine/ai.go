@@ -27,9 +27,16 @@ const (
 	defaultAIModel   = "qwen-plus"
 )
 
-// newAIHTTPClient 用于本次流程后续判断的newAIHTTPClient
+// newAIHTTPClient 返回调用 AI 服务的 HTTP 客户端。
+// 除 netguard 的端点策略与超时外，还安装响应形状归一：自建网关可能把 chat completion
+// 响应整体包进 data 字段，而第三方 SDK 只认顶层 choices，不归一会被误判为空结果。
 var newAIHTTPClient = func(baseURL string) (*http.Client, error) {
-	return netguard.ConfiguredEndpointHTTPClient(baseURL, 30*time.Second)
+	// client、err 是 netguard 构造的受控客户端与失败原因。
+	client, err := netguard.ConfiguredEndpointHTTPClient(baseURL, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return withChatResponseUnwrap(client), nil
 }
 
 // AIReplierImpl AI 回复实现。
